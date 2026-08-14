@@ -2237,6 +2237,197 @@ function listarUsuarios() {
 }
 
 /**
+ * Solicita acesso de edição a uma comarca fora do escopo
+ * do gestor de conteúdo.
+ *
+ * O pedido é registrado no LOG e notifica os gestores do
+ * sistema ativos por e-mail (fila EMAILS_PENDENTES).
+ */
+function solicitarPermissaoComarca(comarca) {
+  try {
+    const auth = new AuthService();
+
+    auth.exigirPermissao(
+      CONFIG.PERMISSOES.EDITAR
+    );
+
+    const usuario = auth.usuarioAtual();
+
+    if (usuario.perfil !== CONFIG.PERFIS.GESTOR_CONTEUDO) {
+      throw new Error(
+        "Somente gestores de conteúdo solicitam acesso a comarcas."
+      );
+    }
+
+    const comarcaAlvo =
+      textoSeguro(comarca);
+
+    if (!comarcaAlvo) {
+      throw new Error("Informe a comarca desejada.");
+    }
+
+    /*
+     * A comarca precisa existir na base.
+     */
+    const dados =
+      new TelefoneRepository().listar();
+
+    const chaveAlvo =
+      normalizarChave(comarcaAlvo);
+
+    const existe =
+      dados.some(item =>
+        normalizarChave(
+          textoSeguro(item.comarca)
+        ) === chaveAlvo
+      );
+
+    if (!existe) {
+      throw new Error(
+        "A comarca \"" +
+        comarcaAlvo +
+        "\" não foi encontrada na base."
+      );
+    }
+
+    /*
+     * Sem escopo definido (vazia = todas) não há o que solicitar.
+     */
+    const atuais =
+      Array.isArray(usuario.comarcas)
+        ? usuario.comarcas
+        : [];
+
+    if (atuais.length === 0) {
+      throw new Error(
+        "Você já pode editar todas as comarcas."
+      );
+    }
+
+    const jaTem =
+      atuais.some(item =>
+        normalizarChave(item) === chaveAlvo
+      );
+
+    if (jaTem) {
+      throw new Error(
+        "Você já tem acesso à comarca \"" +
+        comarcaAlvo +
+        "\"."
+      );
+    }
+
+    /*
+     * Destinatários: gestores do sistema ativos;
+     * sem nenhum, usa a configuração EMAIL_GESTOR.
+     */
+    const destinatarios = [];
+
+    try {
+      const sheet = DB.usuarios();
+      const mapa = DB.map(sheet);
+
+      const idxPerfil = mapa.PERFIL;
+      const idxAtivo = mapa.ATIVO;
+      const idxEmail = mapa.EMAIL;
+
+      DB.read(sheet).forEach(linha => {
+        const perfil =
+          String(
+            idxPerfil ? linha[idxPerfil - 1] : ""
+          )
+            .trim()
+            .toUpperCase();
+
+        const ativo =
+          paraBoolean(
+            idxAtivo ? linha[idxAtivo - 1] : false
+          );
+
+        const email =
+          textoSeguro(
+            idxEmail ? linha[idxEmail - 1] : ""
+          );
+
+        if (
+          perfil === CONFIG.PERFIS.GESTOR_SISTEMA &&
+          ativo &&
+          emailValidoAPI(email)
+        ) {
+          destinatarios.push(email);
+        }
+      });
+    } catch (erro) {
+      registrarInfoAPI(
+        "SOLICITAR_ACESSO_COMARCA",
+        "Falha ao listar gestores do sistema: " + erro.message
+      );
+    }
+
+    if (destinatarios.length === 0) {
+      const fallback =
+        obterConfiguracaoAPI("EMAIL_GESTOR");
+
+      if (fallback && emailValidoAPI(fallback)) {
+        destinatarios.push(fallback);
+      }
+    }
+
+    const nomeSolicitante =
+      textoSeguro(usuario.nome) ||
+      String(usuario.email || "")
+        .split("@")[0];
+
+    const assunto =
+      "Solicitação de acesso à comarca - " +
+      comarcaAlvo;
+
+    const corpo =
+      "Um gestor de conteúdo solicitou acesso de edição a uma comarca:\n\n" +
+      "Nome: " + nomeSolicitante + "\n" +
+      "E-mail: " + textoSeguro(usuario.email) + "\n" +
+      "Comarca solicitada: " + comarcaAlvo + "\n\n" +
+      "Para liberar o acesso, edite o usuário no painel de Usuários\n" +
+      "e adicione a comarca à coluna COMARCAS.\n\n" +
+      "Acesse a área administrativa:\n" +
+      obterUrlAdmin();
+
+    let notificados = 0;
+
+    destinatarios.forEach(destino => {
+      if (
+        adicionarEmailPendente(
+          destino,
+          assunto,
+          corpo
+        )
+      ) {
+        notificados++;
+      }
+    });
+
+    registrarLog(
+      "SOLICITAR_ACESSO_COMARCA " +
+      textoSeguro(usuario.email) +
+      " -> " +
+      comarcaAlvo
+    );
+
+    return respostaSucesso({
+      comarca: comarcaAlvo,
+      notificados: notificados
+    });
+  } catch (erro) {
+    registrarErroAPI(
+      "SOLICITAR_ACESSO_COMARCA",
+      erro
+    );
+
+    return respostaErro(erro);
+  }
+}
+
+/**
  * Atualiza um usuário da aba USUARIOS.
  *
  * Permite trocar o perfil (GESTOR_SISTEMA, GESTOR_CONTEUDO ou

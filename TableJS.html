@@ -114,6 +114,125 @@ function podeEditarComarca(comarca) {
   );
 }
 
+/**
+ * Evita reenvio: após solicitar acesso a uma comarca,
+ * o botão fica bloqueado por 10 minutos (mesmo recarregando).
+ */
+function chaveSolicitacaoComarca(comarca) {
+  const email =
+    (typeof usuarioAtual !== "undefined" && usuarioAtual && usuarioAtual.email) || "";
+  return "pjes_solicitada_" + normalizarChaveTabela(email) + "_" + normalizarChaveTabela(comarca);
+}
+
+function comarcaSolicitadaHaPouco(comarca) {
+  try {
+    const chave =
+      chaveSolicitacaoComarca(comarca);
+
+    const registrado =
+      window.sessionStorage.getItem(chave);
+
+    if (!registrado) {
+      return false;
+    }
+
+    const quando = Number(registrado);
+
+    if (!quando || isNaN(quando)) {
+      return false;
+    }
+
+    const limite = 10 * 60 * 1000;
+
+    if (Date.now() - quando < limite) {
+      return true;
+    }
+
+    window.sessionStorage.removeItem(chave);
+    return false;
+  } catch (erro) {
+    return false;
+  }
+}
+
+function marcarComarcaSolicitada(comarca) {
+  try {
+    window.sessionStorage.setItem(
+      chaveSolicitacaoComarca(comarca),
+      String(Date.now())
+    );
+  } catch (erro) {
+    // sem armazenamento disponível: apenas não bloqueia
+  }
+}
+
+function solicitarAcessoComarca(comarca, botao) {
+  if (
+    typeof API === "undefined" ||
+    typeof API.solicitarPermissaoComarca !== "function"
+  ) {
+    notificarTabela(
+      "Recurso indisponível neste momento.",
+      "error"
+    );
+
+    return;
+  }
+
+  const textoOriginal =
+    botao ? botao.textContent : "";
+
+  if (botao) {
+    botao.disabled = true;
+    botao.textContent = "Enviando...";
+  }
+
+  API.solicitarPermissaoComarca(
+    comarca,
+    function(resposta) {
+      if (!resposta || resposta.sucesso !== true) {
+        if (botao) {
+          botao.disabled = false;
+          botao.textContent = textoOriginal || "🔓 Solicitar acesso";
+        }
+
+        notificarTabela(
+          resposta && resposta.erro
+            ? resposta.erro
+            : "Erro ao enviar a solicitação.",
+          "error"
+        );
+
+        return;
+      }
+
+      marcarComarcaSolicitada(comarca);
+
+      if (botao) {
+        botao.textContent = "✓ Solicitado";
+      }
+
+      notificarTabela(
+        "Solicitação enviada ao Gestor do Sistema. Você será avisado por e-mail quando o acesso for liberado.",
+        "success"
+      );
+    },
+    function(erro) {
+      if (botao) {
+        botao.disabled = false;
+        botao.textContent = textoOriginal || "🔓 Solicitar acesso";
+      }
+
+      notificarTabela(
+        erro && erro.message
+          ? erro.message
+          : "Erro ao enviar a solicitação.",
+        "error"
+      );
+    }
+  );
+}
+
 function valorCampoTelefone(
   item,
   ...nomes
@@ -758,25 +877,36 @@ function renderizarTabela(
           )
         );
       } else {
-        const cadeado =
-          document.createElement(
-            "span"
+        const jaSolicitada =
+          comarcaSolicitadaHaPouco(
+            comarca
           );
 
-        cadeado.textContent =
-          "🔒";
+        const botaoSolicitar =
+          criarBotaoTabela(
+            jaSolicitada
+              ? "✓ Solicitado"
+              : "🔓 Solicitar acesso",
+            "btn-secondary",
+            function() {
+              solicitarAcessoComarca(
+                comarca,
+                botaoSolicitar
+              );
+            }
+          );
 
-        cadeado.title =
-          "Você só pode editar telefones das suas comarcas.";
+        botaoSolicitar.title =
+          "Você só pode editar telefones das suas comarcas. Solicite acesso a esta comarca.";
 
-        cadeado.style.fontSize =
-          "14px";
+        botaoSolicitar.disabled =
+          jaSolicitada;
 
-        cadeado.style.opacity =
-          "0.55";
+        botaoSolicitar.style.fontSize =
+          "11px";
 
         grupo.appendChild(
-          cadeado
+          botaoSolicitar
         );
       }
 
