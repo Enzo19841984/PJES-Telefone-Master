@@ -116,6 +116,47 @@ function listarTelefones() {
   }
 }
 
+/**
+ * Lista as comarcas cadastradas (para o seletor do
+ * Formulário de Acesso e demais menus suspensos).
+ */
+function listarComarcas() {
+  try {
+    new AuthService().exigirPermissao(
+      CONFIG.PERMISSOES.VISUALIZAR
+    );
+
+    const dados =
+      new TelefoneRepository().listar();
+
+    const comarcas = {};
+
+    dados.forEach(item => {
+      const comarca =
+        textoSeguro(item.comarca);
+
+      if (comarca && !comarcas[comarca]) {
+        comarcas[comarca] = true;
+      }
+    });
+
+    const lista =
+      Object.keys(comarcas)
+        .sort((a, b) =>
+          a.localeCompare(b, "pt-BR")
+        );
+
+    return respostaSucesso(lista);
+  } catch (erro) {
+    registrarErroAPI(
+      "LISTAR_COMARCAS",
+      erro
+    );
+
+    return respostaErro(erro);
+  }
+}
+
 function pesquisarTelefones(texto) {
   try {
     new AuthService().exigirPermissao(

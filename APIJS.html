@@ -34,6 +34,11 @@ const API = {
       .listarTelefones();
   },
 
+  listarComarcas(sucesso, erro) {
+    criarRunnerAPI(sucesso, erro)
+      .listarComarcas();
+  },
+
   pesquisarTelefones(texto, sucesso, erro) {
     criarRunnerAPI(sucesso, erro)
       .pesquisarTelefones(texto);
