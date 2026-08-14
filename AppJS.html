@@ -1,0 +1,423 @@
+<script>
+/**
+ * ==========================================================
+ * SISTEMA DE TELEFONES TJES
+ * Arquivo: AppJS.html
+ * ==========================================================
+ */
+
+let usuarioAtual = {
+  nome: "Visitante",
+  email: "",
+  perfil: "USUARIO_CONSULTA",
+  logado: false,
+  ativo: false
+};
+
+document.addEventListener("DOMContentLoaded", iniciarSistema);
+
+function usuarioVisitante() {
+  return {
+    nome: "Visitante",
+    email: "",
+    perfil: "USUARIO_CONSULTA",
+    logado: false,
+    ativo: false
+  };
+}
+
+function mensagemErroFrontend(erro, fallback) {
+  if (erro?.message) return String(erro.message);
+  if (typeof erro === "string" && erro.trim()) return erro;
+  return fallback || "Ocorreu um erro inesperado.";
+}
+
+/**
+ * Inicialização pública.
+ *
+ * A consulta carrega os telefones uma única vez.
+ * O DashboardJS utiliza a mesma resposta para alimentar
+ * o dashboard e a consulta.
+ */
+function iniciarSistema() {
+  usuarioAtual = usuarioVisitante();
+
+  atualizarInterfaceUsuario();
+  carregarTelefones();
+  iniciarDarkMode();
+}
+
+function atualizarInterfaceUsuario() {
+  const usuario = usuarioAtual || {};
+  const nome = String(usuario.nome || "Visitante");
+  const perfil = String(
+    usuario.perfil || "USUARIO_CONSULTA"
+  );
+  const email = String(usuario.email || "").trim();
+  const logado =
+    usuario.logado === true &&
+    Boolean(email);
+
+  const userInfo =
+    document.getElementById("user-info");
+
+  if (userInfo) {
+    userInfo.textContent = logado
+      ? nome
+      : "Visitante";
+  }
+
+  const sidebarUser =
+    document.getElementById("sidebar-user");
+
+  if (sidebarUser) {
+    sidebarUser.textContent =
+      "Perfil: " +
+      formatarPerfil(
+        logado
+          ? perfil
+          : "USUARIO_CONSULTA"
+      );
+  }
+
+  const btnAcesso =
+    document.getElementById(
+      "btn-status-acesso"
+    );
+
+  const textoAcesso =
+    document.getElementById(
+      "texto-status-acesso"
+    );
+
+  if (btnAcesso && textoAcesso) {
+    if (!logado) {
+      configurarBotaoAcesso(
+        btnAcesso,
+        textoAcesso,
+        {
+          texto: "Acesso Administrativo",
+          fundo: "#fef3c7",
+          borda: "#f59e0b",
+          cor: "#92400e",
+          acao: fazerLogin
+        }
+      );
+    } else if (
+      perfil === "USUARIO_CONSULTA"
+    ) {
+      configurarBotaoAcesso(
+        btnAcesso,
+        textoAcesso,
+        {
+          texto: "Solicitar Acesso",
+          fundo: "#fef3c7",
+          borda: "#f59e0b",
+          cor: "#92400e",
+          acao: abrirModalAcesso
+        }
+      );
+    } else {
+      configurarBotaoAcesso(
+        btnAcesso,
+        textoAcesso,
+        {
+          texto: "SAIR",
+          fundo: "#fee2e2",
+          borda: "#dc2626",
+          cor: "#991b1b",
+          acao: tratarCliqueAcesso
+        }
+      );
+    }
+  }
+
+  const menuSolicitacoes =
+    document.getElementById(
+      "menu-solicitacoes"
+    );
+
+  if (menuSolicitacoes) {
+    menuSolicitacoes.classList.toggle(
+      "hidden",
+      !logado ||
+        perfil !== "GESTOR_SISTEMA"
+    );
+  }
+
+  const btnNovo =
+    document.getElementById(
+      "btn-novo-telefone"
+    );
+
+  if (btnNovo) {
+    btnNovo.style.display =
+      logado &&
+      perfil !== "USUARIO_CONSULTA"
+        ? ""
+        : "none";
+  }
+
+  if (
+    typeof listaTelefones !==
+      "undefined" &&
+    document.getElementById(
+      "corpo-tabela-telefones"
+    ) &&
+    typeof renderizarTabela ===
+      "function"
+  ) {
+    renderizarTabela(
+      listaTelefones
+    );
+  }
+}
+
+function configurarBotaoAcesso(
+  botao,
+  texto,
+  config
+) {
+  botao.style.background =
+    config.fundo;
+
+  botao.style.borderColor =
+    config.borda;
+
+  botao.style.color =
+    config.cor;
+
+  texto.textContent =
+    config.texto;
+
+  botao.onclick =
+    config.acao;
+}
+
+function formatarPerfil(perfil) {
+  switch (perfil) {
+    case "GESTOR_SISTEMA":
+      return "Gestor do Sistema";
+
+    case "GESTOR_CONTEUDO":
+      return "Gestor de Conteúdo";
+
+    default:
+      return "Usuário de Consulta";
+  }
+}
+
+/**
+ * ----------------------------------------------------------
+ * LOGIN / ADMINISTRAÇÃO
+ * Mantidos para não quebrar o restante da aplicação.
+ * ----------------------------------------------------------
+ */
+
+function fazerLogin() {
+  const destino =
+    String(
+      window.URL_ADMIN || ""
+    ).trim();
+
+  if (!destino) {
+    mostrarToast(
+      "URL administrativa não configurada.",
+      "error"
+    );
+    return;
+  }
+
+  const urlLogin =
+    "https://accounts.google.com/AccountChooser" +
+    "?continue=" +
+    encodeURIComponent(destino) +
+    "&hd=tjes.jus.br" +
+    "&flowName=GlifWebSignIn" +
+    "&flowEntry=AccountChooser";
+
+  window.top.location.href =
+    urlLogin;
+}
+
+function tratarCliqueAcesso() {
+  if (
+    !confirm(
+      "Deseja sair da sessão administrativa?"
+    )
+  ) {
+    return;
+  }
+
+  if (
+    typeof API === "undefined" ||
+    typeof API.logout !== "function"
+  ) {
+    usuarioAtual =
+      usuarioVisitante();
+
+    atualizarInterfaceUsuario();
+    mostrarView("dashboard-view");
+
+    return;
+  }
+
+  API.logout(
+    function(resposta) {
+      if (
+        !resposta ||
+        resposta.sucesso !== true
+      ) {
+        mostrarToast(
+          resposta?.erro ||
+            "Não foi possível sair.",
+          "error"
+        );
+        return;
+      }
+
+      usuarioAtual =
+        usuarioVisitante();
+
+      atualizarInterfaceUsuario();
+      mostrarView("dashboard-view");
+
+      mostrarToast(
+        "Você saiu do acesso administrativo.",
+        "success"
+      );
+    },
+
+    function(erro) {
+      mostrarToast(
+        mensagemErroFrontend(
+          erro,
+          "Não foi possível encerrar a sessão."
+        ),
+        "error"
+      );
+    }
+  );
+}
+
+/**
+ * ----------------------------------------------------------
+ * NAVEGAÇÃO
+ * ----------------------------------------------------------
+ */
+
+function mostrarView(viewId) {
+  const views =
+    document.querySelectorAll(
+      ".view, [id$='-view']"
+    );
+
+  views.forEach(view =>
+    view.classList.add("hidden")
+  );
+
+  const target =
+    document.getElementById(
+      viewId
+    );
+
+  if (!target) {
+    mostrarToast(
+      "Esta tela não foi encontrada.",
+      "warning"
+    );
+    return;
+  }
+
+  target.classList.remove(
+    "hidden"
+  );
+
+  document
+    .querySelectorAll(".menu-item")
+    .forEach(botao => {
+      botao.classList.remove(
+        "active"
+      );
+
+      const onclick =
+        botao.getAttribute(
+          "onclick"
+        ) || "";
+
+      if (
+        onclick.includes(viewId)
+      ) {
+        botao.classList.add(
+          "active"
+        );
+      }
+    });
+
+  if (
+    viewId ===
+      "registro-alteracoes-view" &&
+    typeof carregarRegistroAlteracoes ===
+      "function"
+  ) {
+    carregarRegistroAlteracoes();
+  }
+
+  if (
+    viewId ===
+      "solicitacoes-view" &&
+    typeof carregarSolicitacoes ===
+      "function"
+  ) {
+    carregarSolicitacoes();
+  }
+}
+
+function abrirConfiguracoes() {
+  mostrarView(
+    "configuracoes-view"
+  );
+}
+
+/**
+ * ----------------------------------------------------------
+ * DARK MODE
+ * ----------------------------------------------------------
+ */
+
+function aplicarModoEscuro() {
+  const ativo =
+    localStorage.getItem("darkMode") === "true";
+
+  document.body.classList.toggle(
+    "dark-mode",
+    ativo
+  );
+
+  const toggle =
+    document.getElementById(
+      "toggle-dark-mode"
+    );
+
+  if (toggle) {
+    toggle.checked = ativo;
+  }
+}
+
+function alternarModoEscuro(ativo) {
+  document.body.classList.toggle(
+    "dark-mode",
+    Boolean(ativo)
+  );
+
+  localStorage.setItem(
+    "darkMode",
+    ativo ? "true" : "false"
+  );
+}
+
+document.addEventListener(
+  "DOMContentLoaded",
+  aplicarModoEscuro
+);
+</script>

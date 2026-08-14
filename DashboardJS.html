@@ -1,0 +1,491 @@
+<script>
+/**
+ * ==========================================================
+ * SISTEMA DE TELEFONES TJES
+ * Arquivo: DashboardJS.html
+ * ==========================================================
+ */
+
+let todosTelefones = [];
+let setoresPorComarca = {};
+let telefonesPorSetor = {};
+let microrregioesPorComarca = {};
+let comarcasPorMicrorregiao = {};
+let ordemComarcas = [];
+let microrregiaoSelecionada = "";
+
+function normalizarChave(valor) {
+  return String(valor ?? "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-zA-Z0-9]/g, "")
+    .toUpperCase();
+}
+
+function campoTelefone(item, nomes) {
+  if (!item) return "";
+
+  const chaves = Object.keys(item);
+
+  for (const nome of nomes) {
+    if (Object.prototype.hasOwnProperty.call(item, nome)) {
+      return item[nome];
+    }
+
+    const alvo = normalizarChave(nome);
+    const chave = chaves.find(c => normalizarChave(c) === alvo);
+
+    if (chave !== undefined) {
+      return item[chave];
+    }
+  }
+
+  return "";
+}
+
+function escaparConsulta(valor) {
+  return String(valor ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
+function escaparJs(valor) {
+  return String(valor ?? "")
+    .replace(/\\/g, "\\\\")
+    .replace(/'/g, "\\'")
+    .replace(/\r?\n/g, "\\n");
+}
+
+function chaveSegura(valor) {
+  return String(valor || "").replace(/[^a-zA-Z0-9]/g, "_");
+}
+
+function normalizarTexto(valor) {
+  return String(valor || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim();
+}
+
+function iniciarConsultaTelefones() {
+  if (
+    typeof API === "undefined" ||
+    typeof API.listarTelefones !== "function"
+  ) {
+    console.error("API.listarTelefones não está disponível.");
+    return;
+  }
+
+  API.listarTelefones(
+    function(resp) {
+      if (!resp || resp.sucesso !== true) {
+        mostrarErroConsulta(
+          resp?.erro || "Erro ao carregar telefones."
+        );
+        return;
+      }
+
+      todosTelefones = Array.isArray(resp.dados) ? resp.dados : [];
+
+      processarDados();
+      preencherFiltroMicrorregiao();
+      renderizarComarcas();
+      atualizarDashboardPublico(todosTelefones);
+
+      /* Estado inicial: mapa visível e impressão oculta. */
+      mostrarMapaConsulta();
+    },
+    function(erro) {
+      console.error("Falha ao carregar telefones:", erro);
+
+      mostrarErroConsulta(
+        erro?.message || "Falha na comunicação com o servidor."
+      );
+    }
+  );
+}
+
+function mostrarErroConsulta(mensagem) {
+  const lista = document.getElementById("consulta-lista");
+
+  if (lista) {
+    lista.innerHTML =
+      '<div class="panel">' +
+        '<p style="color:#dc2626;">' +
+          escaparConsulta(mensagem) +
+        '</p>' +
+      '</div>';
+  }
+}
+
+function processarDados() {
+  setoresPorComarca = {};
+  telefonesPorSetor = {};
+  microrregioesPorComarca = {};
+  comarcasPorMicrorregiao = {};
+  ordemComarcas = [];
+
+  const vistosComarcas = {};
+  const vistosSetores = {};
+
+  todosTelefones.forEach(tel => {
+    const comarca = String(
+      campoTelefone(tel, ["comarca"]) || "Sem comarca"
+    ).trim();
+
+    const setor = String(
+      campoTelefone(tel, ["setor"]) || "Sem setor"
+    ).trim();
+
+    const micro = String(
+      campoTelefone(tel, ["microrregiao", "microrregião"]) ||
+      "Sem microrregião"
+    ).trim();
+
+    const chave = comarca + "||" + setor;
+
+    if (!setoresPorComarca[comarca]) {
+      setoresPorComarca[comarca] = [];
+      vistosSetores[comarca] = new Set();
+      ordemComarcas.push(comarca);
+    }
+
+    if (!vistosSetores[comarca].has(setor)) {
+      vistosSetores[comarca].add(setor);
+      setoresPorComarca[comarca].push(setor);
+    }
+
+    microrregioesPorComarca[comarca] = micro;
+
+    if (!comarcasPorMicrorregiao[micro]) {
+      comarcasPorMicrorregiao[micro] = [];
+      vistosComarcas[micro] = new Set();
+    }
+
+    if (!vistosComarcas[micro].has(comarca)) {
+      vistosComarcas[micro].add(comarca);
+      comarcasPorMicrorregiao[micro].push(comarca);
+    }
+
+    if (!telefonesPorSetor[chave]) {
+      telefonesPorSetor[chave] = [];
+    }
+
+    telefonesPorSetor[chave].push(tel);
+  });
+}
+
+function preencherFiltroMicrorregiao() {
+  const select = document.getElementById(
+    "filtro-microrregiao-consulta"
+  );
+
+  if (!select) return;
+
+  const atual = microrregiaoSelecionada;
+
+  select.innerHTML =
+    '<option value="">Selecione uma microrregião</option>';
+
+  Object.keys(comarcasPorMicrorregiao)
+    .forEach(micro => {
+      const option = document.createElement("option");
+
+      option.value = micro;
+      option.textContent = micro;
+
+      select.appendChild(option);
+    });
+
+  select.value = atual;
+}
+
+function selecionarMicrorregiaoConsulta(valor) {
+  microrregiaoSelecionada = String(valor || "").trim();
+
+  const campo = document.getElementById(
+    "campo-pesquisa-consulta"
+  );
+
+  if (campo) campo.value = "";
+
+  renderizarComarcas();
+}
+
+function renderizarComarcas() {
+  const container = document.getElementById("consulta-lista");
+  if (!container) return;
+
+  const campo = document.getElementById("campo-pesquisa-consulta");
+  const termo = normalizarTexto(campo?.value || "");
+
+  let comarcas;
+
+  if (microrregiaoSelecionada) {
+    comarcas =
+      comarcasPorMicrorregiao[microrregiaoSelecionada] || [];
+  } else if (termo) {
+    comarcas = ordemComarcas;
+  } else {
+    container.innerHTML =
+      '<div class="panel consulta-lista-vazio">' +
+        'Selecione uma microrregião para visualizar as comarcas.' +
+      '</div>';
+    return;
+  }
+
+  if (!comarcas.length) {
+    container.innerHTML =
+      '<div class="panel consulta-lista-vazio">' +
+        'Nenhuma comarca encontrada.' +
+      '</div>';
+    return;
+  }
+
+  let html = '<div class="list-group">';
+
+  comarcas.forEach(comarca => {
+    const id = chaveSegura(comarca);
+
+    html +=
+      '<div class="comarca-item" ' +
+        'data-comarca="' +
+          escaparConsulta(normalizarTexto(comarca)) +
+        '" ' +
+        'onclick="toggleComarca(\'' +
+          escaparJs(id) +
+        '\')">' +
+
+        '<span class="comarca-nome">' +
+          escaparConsulta(comarca) +
+        '</span>' +
+
+        '<span class="setor-count">' +
+          (setoresPorComarca[comarca] || []).length +
+          ' setores' +
+        '</span>' +
+
+      '</div>' +
+
+      '<div class="setores-list hidden" id="setores-' +
+        id +
+      '">';
+
+    (
+      setoresPorComarca[comarca] || []
+    ).forEach(setor => {
+      const chave =
+        comarca + "||" + setor;
+
+      html +=
+        '<div class="setor-item" ' +
+          'onclick="selecionarSetor(event,\'' +
+            escaparJs(id) +
+            '\',\'' +
+            escaparJs(setor) +
+            '\',\'' +
+            escaparJs(chave) +
+          '\')">' +
+          escaparConsulta(setor) +
+        '</div>';
+    });
+
+    html += '</div>';
+  });
+
+  container.innerHTML =
+    html + '</div>';
+
+  if (termo) {
+    filtrarSetoresConsulta();
+  }
+}
+
+function toggleComarca(id) {
+  const el = document.getElementById(
+    "setores-" + id
+  );
+
+  if (el) {
+    el.classList.toggle("hidden");
+  }
+}
+
+function selecionarSetor(
+  evento,
+  idSeguro,
+  setor,
+  chave
+) {
+  const comarca =
+    Object.keys(setoresPorComarca).find(
+      c => chaveSegura(c) === idSeguro
+    ) || "";
+
+  const contatos =
+    telefonesPorSetor[chave] || [];
+
+  renderizarDetalhes(
+    comarca,
+    setor,
+    contatos
+  );
+
+  document
+    .querySelectorAll(".setor-item")
+    .forEach(el => {
+      el.style.background = "";
+    });
+
+  if (evento?.currentTarget) {
+    evento.currentTarget.style.background =
+      "#e2e8f0";
+  }
+}
+
+function atualizarDashboardPublico(telefones) {
+  const setores = new Set();
+  const tipos = new Set();
+  const porTipo = {};
+  const porComarca = {};
+
+  (
+    Array.isArray(telefones)
+      ? telefones
+      : []
+  ).forEach(item => {
+    const comarca = String(
+      campoTelefone(item, ["comarca"]) ||
+      "Sem comarca"
+    ).trim();
+
+    const setor = String(
+      campoTelefone(item, ["setor"]) ||
+      "Sem setor"
+    ).trim();
+
+    const tipo = String(
+      campoTelefone(item, ["tipo"]) ||
+      "Não informado"
+    ).trim();
+
+    setores.add(comarca + "||" + setor);
+    tipos.add(tipo);
+
+    porTipo[tipo] =
+      (porTipo[tipo] || 0) + 1;
+
+    porComarca[comarca] =
+      (porComarca[comarca] || 0) + 1;
+  });
+
+  atualizarTexto(
+    "total-telefones",
+    Array.isArray(telefones)
+      ? telefones.length
+      : 0
+  );
+
+  atualizarTexto(
+    "total-setores",
+    setores.size
+  );
+
+  atualizarTexto(
+    "total-tipos",
+    tipos.size
+  );
+
+  renderizarResumoDashboard(
+    document.getElementById("grafico-tipos"),
+    porTipo
+  );
+
+  renderizarResumoDashboard(
+    document.getElementById("grafico-comarcas"),
+    porComarca
+  );
+}
+
+function atualizarTexto(id, valor) {
+  const el =
+    document.getElementById(id);
+
+  if (el) {
+    el.textContent =
+      String(valor);
+  }
+}
+
+function renderizarResumoDashboard(
+  container,
+  dados
+) {
+  if (!container) return;
+
+  container.innerHTML = "";
+
+  const entradas =
+    Object.entries(dados || {})
+      .map(([nome, valor]) => ({
+        nome,
+        valor: Number(valor) || 0
+      }))
+      .sort(
+        (a, b) =>
+          b.valor - a.valor ||
+          a.nome.localeCompare(
+            b.nome,
+            "pt-BR"
+          )
+      );
+
+  if (!entradas.length) {
+    container.innerHTML =
+      '<p style="color:#94a3b8;margin:0;">' +
+        'Nenhum contato cadastrado.' +
+      '</p>';
+    return;
+  }
+
+  entradas
+    .slice(0, 15)
+    .forEach(item => {
+      const linha =
+        document.createElement("div");
+
+      linha.style.cssText =
+        "display:flex;" +
+        "justify-content:space-between;" +
+        "align-items:center;" +
+        "gap:12px;" +
+        "padding:8px 0;" +
+        "border-bottom:1px solid #e2e8f0;";
+
+      const nome =
+        document.createElement("span");
+
+      nome.textContent =
+        item.nome;
+
+      const numero =
+        document.createElement("strong");
+
+      numero.textContent =
+        String(item.valor);
+
+      linha.append(
+        nome,
+        numero
+      );
+
+      container.appendChild(
+        linha
+      );
+    });
+}
+</script>

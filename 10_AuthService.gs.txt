@@ -1,0 +1,244 @@
+/**
+ * ==========================================================
+ * SISTEMA DE TELEFONES TJES
+ * Arquivo: 10_AuthService.gs
+ * ==========================================================
+ */
+
+class AuthService {
+  constructor() {
+    this.cache = CacheService.getUserCache();
+    this.email = this.obterEmailDaSessao();
+  }
+
+  /**
+   * Obtém a identidade real do usuário ativo.
+   */
+  static obterEmailAtivo() {
+    try {
+      return normalizarEmail(
+        Session
+          .getActiveUser()
+          .getEmail()
+      );
+    } catch (erro) {
+      return "";
+    }
+  }
+
+  /**
+   * A sessão do aplicativo fica vinculada
+   * ao usuário Google ativo.
+   */
+  obterEmailDaSessao() {
+    const sessaoAtiva = this.cache.get("sessaoAplicacaoAtiva") === "SIM";
+
+    if (!sessaoAtiva) {
+      return "";
+    }
+
+    const emailCache = normalizarEmail(this.cache.get("emailLogado") || "");
+
+    const emailAtivo = AuthService.obterEmailAtivo();
+
+    /**
+     * Nunca confia apenas no cache.
+     * O e-mail da sessão deve ser o mesmo
+     * da conta Google atualmente ativa.
+     */
+    if (!emailCache || !emailAtivo || emailCache !== emailAtivo || !emailInstitucional(emailCache)) {
+      return "";
+    }
+
+    return emailCache;
+  }
+
+  /**
+   * Salva sessão autenticada do aplicativo.
+   */
+  static salvarSessao(email, perfil) {
+    const emailNormalizado = normalizarEmail(email);
+
+    if (!emailInstitucional(emailNormalizado)
+    ) {
+      throw new Error("Somente contas institucionais do TJES podem iniciar sessão.");
+    }
+
+    const perfilNormalizado =
+      String(
+        perfil ||
+        CONFIG.PERFIS.USUARIO_CONSULTA
+      )
+        .trim()
+        .toUpperCase();
+
+    const perfisValidos = [CONFIG.PERFIS.GESTOR_SISTEMA, CONFIG.PERFIS.GESTOR_CONTEUDO, CONFIG.PERFIS.USUARIO_CONSULTA];
+
+    const perfilSeguro = perfisValidos.includes(perfilNormalizado) ? perfilNormalizado : CONFIG.PERFIS.USUARIO_CONSULTA;
+
+    const cache = CacheService.getUserCache();
+
+    const duracao = CONFIG.AUTH.DURACAO_SESSAO_SEGUNDOS;
+
+    cache.put("emailLogado", emailNormalizado, duracao);
+
+    cache.put("perfilLogado", perfilSeguro, duracao);
+
+    cache.put("sessaoAplicacaoAtiva", "SIM", duracao);
+  }
+
+  /**
+   * Encerra a sessão do aplicativo.
+   *
+   * Não encerra a conta Google.
+   */
+  static limparSessao() {
+    const cache = CacheService.getUserCache();
+
+    cache.remove("emailLogado");
+    cache.remove("perfilLogado");
+    cache.remove("sessaoAplicacaoAtiva");
+  }
+
+  /**
+   * Retorna o usuário atual.
+   */
+  usuarioAtual() {
+    if (!this.email) {
+      return {
+        email: "",
+        nome: "Visitante",
+        perfil: CONFIG.PERFIS.USUARIO_CONSULTA,
+        logado: false,
+        ativo: false
+      };
+    }
+
+    if (!emailInstitucional(this.email)) {
+      return {
+        email: "",
+        nome: "Visitante",
+        perfil: CONFIG.PERFIS.USUARIO_CONSULTA,
+        logado: false,
+        ativo: false
+      };
+    }
+
+    const usuario = this.buscarUsuario(this.email);
+
+    return {
+      email: this.email,
+      nome: usuario.nome || this.email.split("@")[0],
+      perfil: usuario.ativo ? usuario.perfil : CONFIG.PERFIS.USUARIO_CONSULTA,
+      logado: true,
+      ativo: usuario.ativo === true
+    };
+  }
+
+  /**
+   * Pesquisa usuário na aba USUARIOS.
+   */
+  buscarUsuario(email) {
+    const sheet = DB.usuarios();
+
+    const dados = DB.read(sheet);
+
+    for (const linha of dados) {
+      const emailLinha = normalizarEmail(linha[0]);
+
+      if (emailLinha !== normalizarEmail(email)) {
+        continue;
+      }
+
+      const nome = textoSeguro(linha[1]);
+
+      const perfilInformado =
+        String(
+          linha[2] ||
+          CONFIG.PERFIS.USUARIO_CONSULTA
+        )
+          .trim()
+          .toUpperCase();
+
+      const perfisValidos = [CONFIG.PERFIS.GESTOR_SISTEMA, CONFIG.PERFIS.GESTOR_CONTEUDO, CONFIG.PERFIS.USUARIO_CONSULTA];
+
+      const perfilSeguro = perfisValidos.includes(perfilInformado) ? perfilInformado : CONFIG.PERFIS.USUARIO_CONSULTA;
+
+      const ativo = paraBoolean(linha[3]);
+
+      return {
+        email: emailLinha,
+        nome: nome,
+        perfil: ativo ? perfilSeguro : CONFIG.PERFIS.USUARIO_CONSULTA,
+        ativo: ativo
+      };
+    }
+
+    /**
+     * Usuário institucional ainda não aprovado.
+     * Ele pode solicitar acesso, mas não pode editar.
+     */
+    return {
+      email: normalizarEmail(email),
+      nome: normalizarEmail(email).split("@")[0],
+      perfil: CONFIG.PERFIS.USUARIO_CONSULTA,
+      ativo: false
+    };
+  }
+
+  perfilAtual() {
+    return this.usuarioAtual().perfil;
+  }
+
+  exigirPermissao(permissao) {
+    const usuario = this.usuarioAtual();
+
+    const regras = {
+      GESTOR_SISTEMA: [
+        CONFIG.PERMISSOES.VISUALIZAR,
+        CONFIG.PERMISSOES.PESQUISAR,
+        CONFIG.PERMISSOES.EDITAR,
+        CONFIG.PERMISSOES.EXCLUIR,
+        CONFIG.PERMISSOES.HISTORICO
+      ],
+
+      GESTOR_CONTEUDO: [
+        CONFIG.PERMISSOES.VISUALIZAR,
+        CONFIG.PERMISSOES.PESQUISAR,
+        CONFIG.PERMISSOES.EDITAR,
+        CONFIG.PERMISSOES.EXCLUIR,
+        CONFIG.PERMISSOES.HISTORICO
+      ],
+
+      USUARIO_CONSULTA: [CONFIG.PERMISSOES.VISUALIZAR, CONFIG.PERMISSOES.PESQUISAR]
+    };
+
+    const permissoes = regras[usuario.perfil] || [];
+
+    const permissoesAdministrativas = [CONFIG.PERMISSOES.EDITAR, CONFIG.PERMISSOES.EXCLUIR, CONFIG.PERMISSOES.HISTORICO];
+
+    if (permissoesAdministrativas.includes(permissao) && !usuario.logado) {
+      throw new Error("Faça login pelo botão 'Acesso Administrativo'.");
+    }
+
+    if (!permissoes.includes(permissao)) {
+      throw new Error("Usuário sem permissão para esta operação.");
+    }
+
+    return true;
+  }
+
+  exigirPerfil(perfilNecessario) {
+    const usuario = this.usuarioAtual();
+
+    if (!usuario.logado) {
+      throw new Error("É necessário estar autenticado.");
+    }
+
+    if (usuario.perfil !== perfilNecessario) {
+      throw new Error("Acesso permitido somente para " + perfilNecessario + ".");
+    }
+
+    return true;
+  }
+}

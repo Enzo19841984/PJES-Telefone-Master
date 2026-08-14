@@ -1,0 +1,1732 @@
+/**
+ * ==========================================================
+ * SISTEMA DE TELEFONES TJES
+ * Arquivo: 11_API.gs
+ * ==========================================================
+ */
+
+/**
+ * ==========================================================
+ * RESPOSTAS
+ * ==========================================================
+ */
+
+function respostaSucesso(dados) {
+  return {
+    sucesso: true,
+    dados: serializarDadosAPI(dados)
+  };
+}
+
+function respostaErro(erro) {
+  let mensagem = "Erro desconhecido.";
+
+  if (erro && erro.message) {
+    mensagem = String(erro.message);
+  } else if (erro !== null && erro !== undefined) {
+    mensagem = String(erro);
+  }
+
+  return {
+    sucesso: false,
+    erro: mensagem
+  };
+}
+
+function serializarDadosAPI(dados) {
+  if (dados === undefined || dados === null) {
+    return null;
+  }
+
+  return JSON.parse(
+    JSON.stringify(dados)
+  );
+}
+
+/**
+ * ==========================================================
+ * API PRINCIPAL
+ * ==========================================================
+ */
+
+function carregarSistema() {
+  try {
+    const usuario =
+      new AuthService().usuarioAtual();
+
+    return respostaSucesso({
+      usuario: usuario.email || "",
+      versao: CONFIG.SISTEMA.VERSAO
+    });
+  } catch (erro) {
+    registrarErroAPI(
+      "CARREGAR_SISTEMA",
+      erro
+    );
+
+    return respostaErro(erro);
+  }
+}
+
+function listarTelefones() {
+  try {
+    new AuthService().exigirPermissao(
+      CONFIG.PERMISSOES.VISUALIZAR
+    );
+
+    const dados =
+      new TelefoneRepository().listar();
+
+    return respostaSucesso(dados);
+  } catch (erro) {
+    registrarErroAPI(
+      "LISTAR_TELEFONES",
+      erro
+    );
+
+    return respostaErro(erro);
+  }
+}
+
+function pesquisarTelefones(texto) {
+  try {
+    new AuthService().exigirPermissao(
+      CONFIG.PERMISSOES.PESQUISAR
+    );
+
+    const termo =
+      texto === null || texto === undefined
+        ? ""
+        : String(texto).trim();
+
+    if (
+      termo &&
+      limparTexto(termo).length <
+        CONFIG.LIMITES.TAMANHO_PESQUISA
+    ) {
+      return respostaSucesso([]);
+    }
+
+    return respostaSucesso(
+      new TelefoneRepository().pesquisar(termo)
+    );
+  } catch (erro) {
+    registrarErroAPI(
+      "PESQUISAR_TELEFONES",
+      erro
+    );
+
+    return respostaErro(erro);
+  }
+}
+
+function obterTelefone(id) {
+  try {
+    new AuthService().exigirPermissao(
+      CONFIG.PERMISSOES.VISUALIZAR
+    );
+
+    const idBusca = textoSeguro(id);
+
+    if (!idBusca) {
+      throw new Error(
+        "ID do telefone é obrigatório."
+      );
+    }
+
+    return respostaSucesso(
+      new TelefoneRepository().obter(idBusca)
+    );
+  } catch (erro) {
+    registrarErroAPI(
+      "OBTER_TELEFONE",
+      erro
+    );
+
+    return respostaErro(erro);
+  }
+}
+
+function carregarDashboard() {
+  try {
+    new AuthService().exigirPermissao(
+      CONFIG.PERMISSOES.VISUALIZAR
+    );
+
+    const telefones =
+      new TelefoneRepository().listar();
+
+    const tipos = {};
+    const setores = {};
+    const comarcas = {};
+
+    telefones.forEach(item => {
+      const tipo =
+        textoSeguro(item.tipo) ||
+        "Não informado";
+
+      const setor =
+        textoSeguro(item.setor) ||
+        "Não informado";
+
+      const comarca =
+        textoSeguro(item.comarca) ||
+        "Não informado";
+
+      tipos[tipo] =
+        (tipos[tipo] || 0) + 1;
+
+      setores[setor] =
+        (setores[setor] || 0) + 1;
+
+      comarcas[comarca] =
+        (comarcas[comarca] || 0) + 1;
+    });
+
+    return respostaSucesso({
+      total: telefones.length,
+      tipos: tipos,
+      setores: setores,
+      comarcas: comarcas
+    });
+  } catch (erro) {
+    registrarErroAPI(
+      "DASHBOARD",
+      erro
+    );
+
+    return respostaErro(erro);
+  }
+}
+
+function criarTelefone(dados) {
+  try {
+    new AuthService().exigirPermissao(
+      CONFIG.PERMISSOES.EDITAR
+    );
+
+    if (!ehObjeto(dados)) {
+      throw new Error(
+        "Os dados do telefone não foram fornecidos."
+      );
+    }
+
+    return respostaSucesso(
+      new TelefoneRepository().inserir(dados)
+    );
+  } catch (erro) {
+    registrarErroAPI(
+      "CRIAR_TELEFONE",
+      erro
+    );
+
+    return respostaErro(erro);
+  }
+}
+
+function atualizarTelefone(id, dados) {
+  try {
+    new AuthService().exigirPermissao(
+      CONFIG.PERMISSOES.EDITAR
+    );
+
+    const idBusca = textoSeguro(id);
+
+    if (!idBusca) {
+      throw new Error(
+        "ID do telefone é obrigatório para atualização."
+      );
+    }
+
+    if (!ehObjeto(dados)) {
+      throw new Error(
+        "Dados para atualização não foram fornecidos."
+      );
+    }
+
+    return respostaSucesso(
+      new TelefoneRepository().atualizar(
+        idBusca,
+        dados
+      )
+    );
+  } catch (erro) {
+    registrarErroAPI(
+      "ATUALIZAR_TELEFONE",
+      erro
+    );
+
+    return respostaErro(erro);
+  }
+}
+
+function excluirTelefone(id) {
+  try {
+    new AuthService().exigirPermissao(
+      CONFIG.PERMISSOES.EXCLUIR
+    );
+
+    const idBusca = textoSeguro(id);
+
+    if (!idBusca) {
+      throw new Error(
+        "ID do telefone é obrigatório."
+      );
+    }
+
+    const resultado =
+      new TelefoneRepository().excluir(idBusca);
+
+    registrarInfoAPI(
+      "EXCLUIR_TELEFONE",
+      "Telefone excluído: " + idBusca
+    );
+
+    return respostaSucesso(resultado);
+  } catch (erro) {
+    registrarErroAPI(
+      "EXCLUIR_TELEFONE",
+      erro
+    );
+
+    return respostaErro(erro);
+  }
+}
+
+function listarHistorico(id) {
+  try {
+    new AuthService().exigirPermissao(
+      CONFIG.PERMISSOES.HISTORICO
+    );
+
+    const idBusca = textoSeguro(id);
+
+    if (!idBusca) {
+      throw new Error(
+        "ID do telefone é obrigatório."
+      );
+    }
+
+    return respostaSucesso(
+      new HistoryService().listar(idBusca)
+    );
+  } catch (erro) {
+    registrarErroAPI(
+      "LISTAR_HISTORICO",
+      erro
+    );
+
+    return respostaErro(erro);
+  }
+}
+
+function obterUsuarioAtual() {
+  try {
+    return respostaSucesso(
+      new AuthService().usuarioAtual()
+    );
+  } catch (erro) {
+    registrarErroAPI(
+      "OBTER_USUARIO",
+      erro
+    );
+
+    return respostaErro(erro);
+  }
+}
+
+function encerrarSessao() {
+  try {
+    AuthService.limparSessao();
+    return respostaSucesso(true);
+  } catch (erro) {
+    registrarErroAPI(
+      "LOGOUT",
+      erro
+    );
+
+    return respostaErro(erro);
+  }
+}
+
+/**
+ * ==========================================================
+ * SOLICITAÇÕES DE ACESSO
+ * ==========================================================
+ */
+
+function listarSolicitacoes() {
+  try {
+    new AuthService().exigirPerfil(
+      CONFIG.PERFIS.GESTOR_SISTEMA
+    );
+
+    const sheet =
+      obterPlanilhaAPI().getSheetByName(
+        CONFIG.SHEETS.SOLICITACOES_ACESSO
+      );
+
+    if (!sheet) {
+      throw new Error(
+        "Aba SOLICITACOES_ACESSO não encontrada."
+      );
+    }
+
+    const dados =
+      sheet.getDataRange().getValues();
+
+    if (dados.length <= 1) {
+      return respostaSucesso([]);
+    }
+
+    const result =
+      dados
+        .slice(1)
+        .filter(row =>
+          String(row[5] || "")
+            .trim()
+            .toUpperCase() === "PENDENTE"
+        )
+        .map(row => ({
+          id: row[0],
+          email: row[1],
+          nome: row[2],
+          perfilSolicitado: row[3],
+          justificativa: row[4],
+          status: row[5],
+          data: row[6]
+        }));
+
+    return respostaSucesso(result);
+  } catch (erro) {
+    registrarErroAPI(
+      "LISTAR_SOLICITACOES",
+      erro
+    );
+
+    return respostaErro(erro);
+  }
+}
+
+function solicitarAcesso(nome, perfil) {
+  const lock =
+    LockService.getScriptLock();
+
+  let bloqueado = false;
+
+  try {
+    lock.waitLock(30000);
+    bloqueado = true;
+
+    const usuario =
+      new AuthService().usuarioAtual();
+
+    if (
+      !usuario.logado ||
+      !usuario.email
+    ) {
+      throw new Error(
+        "É necessário estar autenticado."
+      );
+    }
+
+    if (!emailInstitucional(usuario.email)) {
+      throw new Error(
+        "Somente contas institucionais podem solicitar acesso."
+      );
+    }
+
+    if (
+      usuario.perfil !==
+      CONFIG.PERFIS.USUARIO_CONSULTA
+    ) {
+      throw new Error(
+        "Esta conta já possui um perfil administrativo."
+      );
+    }
+
+    const nomeNormalizado =
+      textoSeguro(nome);
+
+    if (nomeNormalizado.length < 3) {
+      throw new Error(
+        "Informe um nome válido."
+      );
+    }
+
+    if (
+      nomeNormalizado.length >
+      CONFIG.LIMITES.TAMANHO_MAXIMO_NOME
+    ) {
+      throw new Error(
+        "O nome informado é muito grande."
+      );
+    }
+
+    const perfilSolicitado =
+      String(perfil || "")
+        .trim()
+        .toUpperCase();
+
+    if (
+      perfilSolicitado !==
+      CONFIG.PERFIS.GESTOR_CONTEUDO
+    ) {
+      throw new Error(
+        "Perfil solicitado inválido."
+      );
+    }
+
+    const sheet =
+      obterPlanilhaAPI().getSheetByName(
+        CONFIG.SHEETS.SOLICITACOES_ACESSO
+      );
+
+    if (!sheet) {
+      throw new Error(
+        "Aba SOLICITACOES_ACESSO não encontrada."
+      );
+    }
+
+    const dados =
+      sheet.getDataRange().getValues();
+
+    const emailSolicitante =
+      normalizarEmail(usuario.email);
+
+    const existePendente =
+      dados.slice(1).some(row => {
+        const emailLinha =
+          normalizarEmail(row[1]);
+
+        const statusLinha =
+          String(row[5] || "")
+            .trim()
+            .toUpperCase();
+
+        return (
+          emailLinha === emailSolicitante &&
+          statusLinha === "PENDENTE"
+        );
+      });
+
+    if (existePendente) {
+      throw new Error(
+        "Já existe uma solicitação pendente para este e-mail."
+      );
+    }
+
+    const id = Utilities.getUuid();
+
+    sheet.appendRow([
+      id,
+      emailSolicitante,
+      nomeNormalizado,
+      perfilSolicitado,
+      "",
+      "PENDENTE",
+      new Date(),
+      "",
+      ""
+    ]);
+
+    try {
+      notificarNovaSolicitacao(
+        emailSolicitante,
+        nomeNormalizado,
+        perfilSolicitado
+      );
+    } catch (erroEmail) {
+      registrarErroAPI(
+        "NOTIFICAR_NOVA_SOLICITACAO",
+        erroEmail
+      );
+    }
+
+    return respostaSucesso({ id: id });
+  } catch (erro) {
+    registrarErroAPI(
+      "SOLICITAR_ACESSO",
+      erro
+    );
+
+    return respostaErro(erro);
+  } finally {
+    if (bloqueado) {
+      lock.releaseLock();
+    }
+  }
+}
+
+function localizarSolicitacaoAPI(sheet, id) {
+  const idBusca = textoSeguro(id);
+
+  const dados =
+    sheet.getDataRange().getValues();
+
+  for (
+    let i = 1;
+    i < dados.length;
+    i++
+  ) {
+    if (
+      textoSeguro(dados[i][0]) ===
+      idBusca
+    ) {
+      return {
+        linha: i + 1,
+        id: dados[i][0],
+        email: normalizarEmail(dados[i][1]),
+        nome: textoSeguro(dados[i][2]),
+        perfil: String(dados[i][3] || "")
+          .trim()
+          .toUpperCase(),
+        status: String(dados[i][5] || "")
+          .trim()
+          .toUpperCase()
+      };
+    }
+  }
+
+  return null;
+}
+
+function processarSolicitacaoAPI(id, novoStatus) {
+  const lock =
+    LockService.getScriptLock();
+
+  let bloqueado = false;
+
+  try {
+    lock.waitLock(30000);
+    bloqueado = true;
+
+    new AuthService().exigirPerfil(
+      CONFIG.PERFIS.GESTOR_SISTEMA
+    );
+
+    const idBusca = textoSeguro(id);
+
+    if (!idBusca) {
+      throw new Error(
+        "ID da solicitação é obrigatório."
+      );
+    }
+
+    const status =
+      String(novoStatus || "")
+        .trim()
+        .toUpperCase();
+
+    if (
+      !["APROVADO", "REJEITADO"].includes(status)
+    ) {
+      throw new Error(
+        "Status de solicitação inválido."
+      );
+    }
+
+    const ss = obterPlanilhaAPI();
+
+    const sheetSolic =
+      ss.getSheetByName(
+        CONFIG.SHEETS.SOLICITACOES_ACESSO
+      );
+
+    if (!sheetSolic) {
+      throw new Error(
+        "Aba SOLICITACOES_ACESSO não encontrada."
+      );
+    }
+
+    const solicitacao =
+      localizarSolicitacaoAPI(
+        sheetSolic,
+        idBusca
+      );
+
+    if (!solicitacao) {
+      throw new Error(
+        "Solicitação não encontrada."
+      );
+    }
+
+    if (solicitacao.status !== "PENDENTE") {
+      throw new Error(
+        "Esta solicitação já foi processada."
+      );
+    }
+
+    if (
+      solicitacao.perfil !==
+      CONFIG.PERFIS.GESTOR_CONTEUDO
+    ) {
+      throw new Error(
+        "O perfil solicitado é inválido."
+      );
+    }
+
+    if (status === "APROVADO") {
+      const sheetUsuarios =
+        ss.getSheetByName(
+          CONFIG.SHEETS.USUARIOS
+        );
+
+      if (!sheetUsuarios) {
+        throw new Error(
+          "Aba USUARIOS não encontrada."
+        );
+      }
+
+      const usuarios =
+        sheetUsuarios.getDataRange().getValues();
+
+      let usuarioExiste = false;
+
+      for (
+        let i = 1;
+        i < usuarios.length;
+        i++
+      ) {
+        const emailUsuario =
+          normalizarEmail(usuarios[i][0]);
+
+        if (
+          emailUsuario ===
+          solicitacao.email
+        ) {
+          sheetUsuarios
+            .getRange(i + 1, 2)
+            .setValue(solicitacao.nome);
+
+          sheetUsuarios
+            .getRange(i + 1, 3)
+            .setValue(
+              CONFIG.PERFIS.GESTOR_CONTEUDO
+            );
+
+          sheetUsuarios
+            .getRange(i + 1, 4)
+            .setValue("SIM");
+
+          usuarioExiste = true;
+          break;
+        }
+      }
+
+      if (!usuarioExiste) {
+        sheetUsuarios.appendRow([
+          solicitacao.email,
+          solicitacao.nome,
+          CONFIG.PERFIS.GESTOR_CONTEUDO,
+          "SIM"
+        ]);
+      }
+    }
+
+    const aprovador =
+      obterEmailSessaoAPI();
+
+    sheetSolic
+      .getRange(solicitacao.linha, 6)
+      .setValue(status);
+
+    sheetSolic
+      .getRange(solicitacao.linha, 8)
+      .setValue(aprovador);
+
+    sheetSolic
+      .getRange(solicitacao.linha, 9)
+      .setValue(new Date());
+
+    try {
+      notificarDecisaoSolicitacao(
+        solicitacao.email,
+        solicitacao.nome,
+        status,
+        solicitacao.perfil
+      );
+    } catch (erroEmail) {
+      registrarErroAPI(
+        "NOTIFICAR_DECISAO_SOLICITACAO",
+        erroEmail
+      );
+    }
+
+    registrarInfoAPI(
+      status === "APROVADO"
+        ? "APROVAR_SOLICITACAO"
+        : "REJEITAR_SOLICITACAO",
+      "Solicitação processada: " +
+        idBusca +
+        " - " +
+        status
+    );
+
+    return respostaSucesso(true);
+  } catch (erro) {
+    registrarErroAPI(
+      novoStatus === "APROVADO"
+        ? "APROVAR_SOLICITACAO"
+        : "REJEITAR_SOLICITACAO",
+      erro
+    );
+
+    return respostaErro(erro);
+  } finally {
+    if (bloqueado) {
+      lock.releaseLock();
+    }
+  }
+}
+
+function aprovarSolicitacao(id) {
+  return processarSolicitacaoAPI(
+    id,
+    "APROVADO"
+  );
+}
+
+function rejeitarSolicitacao(id) {
+  return processarSolicitacaoAPI(
+    id,
+    "REJEITADO"
+  );
+}
+
+/**
+ * ==========================================================
+ * HISTÓRICO GERAL
+ * ==========================================================
+ */
+
+function listarHistoricoGeral() {
+  try {
+    const service =
+      new HistoryService();
+
+    const registros =
+      service.listarTodos() || [];
+
+    function objetoPreenchido(obj) {
+      return !!(
+        obj &&
+        typeof obj === "object" &&
+        !Array.isArray(obj) &&
+        Object.keys(obj).length
+      );
+    }
+
+    function parseHistorico(valor) {
+      if (
+        valor === null ||
+        valor === undefined ||
+        String(valor).trim() === ""
+      ) {
+        return {};
+      }
+
+      if (
+        typeof valor === "object"
+      ) {
+        return valor;
+      }
+
+      try {
+        const obj =
+          JSON.parse(String(valor));
+
+        return obj &&
+          typeof obj === "object"
+          ? obj
+          : {};
+      } catch (erro) {
+        return {};
+      }
+    }
+
+    function ehEmail(valor) {
+      return /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+        .test(
+          String(valor || "").trim()
+        );
+    }
+
+    function extrairUsuario(
+      item,
+      usuarioJson
+    ) {
+      const usuario =
+        String(item.usuario || "").trim();
+
+      if (
+        usuario &&
+        ehEmail(usuario)
+      ) {
+        return usuario;
+      }
+
+      const acao =
+        String(item.acao || "").trim();
+
+      if (ehEmail(acao)) {
+        return acao;
+      }
+
+      if (
+        usuarioJson &&
+        typeof usuarioJson === "object"
+      ) {
+        const interno =
+          usuarioJson.usuario ||
+          usuarioJson.USUARIO ||
+          usuarioJson.email ||
+          usuarioJson.EMAIL ||
+          "";
+
+        if (ehEmail(interno)) {
+          return String(interno).trim();
+        }
+      }
+
+      return usuario || "-";
+    }
+
+    function normalizarAcao(
+      acao,
+      antes,
+      depois,
+      usuarioJson
+    ) {
+      const valor =
+        String(acao || "")
+          .trim()
+          .toUpperCase();
+
+      if (
+        valor === "CRIACAO" ||
+        valor === "CRIAÇÃO"
+      ) {
+        return "Criação";
+      }
+
+      if (
+        valor === "EDICAO" ||
+        valor === "EDIÇÃO"
+      ) {
+        return "Edição";
+      }
+
+      if (
+        valor === "EXCLUSAO" ||
+        valor === "EXCLUSÃO"
+      ) {
+        return "Exclusão";
+      }
+
+      /*
+       * Compatibilidade com registros antigos
+       * em que ACAO pode conter um e-mail.
+       */
+      if (
+        ehEmail(valor) ||
+        objetoPreenchido(usuarioJson)
+      ) {
+        if (
+          !objetoPreenchido(antes) &&
+          objetoPreenchido(depois)
+        ) {
+          return "Criação";
+        }
+
+        if (
+          objetoPreenchido(antes) &&
+          !objetoPreenchido(depois)
+        ) {
+          return "Exclusão";
+        }
+
+        if (
+          objetoPreenchido(antes) &&
+          objetoPreenchido(depois)
+        ) {
+          return "Edição";
+        }
+
+        if (
+          !objetoPreenchido(antes) &&
+          !objetoPreenchido(depois) &&
+          objetoPreenchido(usuarioJson)
+        ) {
+          return "Criação";
+        }
+      }
+
+      return String(acao || "-");
+    }
+
+    function extrairSnapshot(
+      antes,
+      depois,
+      usuarioJson,
+      acao
+    ) {
+      const acaoNormalizada =
+        String(acao || "")
+          .trim()
+          .toUpperCase();
+
+      /*
+       * Para exclusão, o estado relevante é ANTES.
+       */
+      if (
+        acaoNormalizada === "EXCLUSAO" ||
+        acaoNormalizada === "EXCLUSÃO"
+      ) {
+        if (objetoPreenchido(antes)) {
+          return antes;
+        }
+
+        return
+          objetoPreenchido(usuarioJson)
+            ? usuarioJson
+            : {};
+      }
+
+      /*
+       * Para criação/edição, preferimos DEPOIS.
+       */
+      if (objetoPreenchido(depois)) {
+        return depois;
+      }
+
+      if (objetoPreenchido(antes)) {
+        return antes;
+      }
+
+      if (objetoPreenchido(usuarioJson)) {
+        return usuarioJson;
+      }
+
+      return {};
+    }
+
+    function campo(obj, ...nomes) {
+      if (
+        !obj ||
+        typeof obj !== "object"
+      ) {
+        return "";
+      }
+
+      for (const nome of nomes) {
+        if (
+          Object.prototype.hasOwnProperty.call(
+            obj,
+            nome
+          )
+        ) {
+          return obj[nome];
+        }
+      }
+
+      return "";
+    }
+
+    function formatarContato(obj) {
+      if (!objetoPreenchido(obj)) {
+        return "-";
+      }
+
+      const campos = [];
+
+      const microrregiao =
+        campo(
+          obj,
+          "microrregiao",
+          "MICRORREGIAO"
+        );
+
+      const comarca =
+        campo(
+          obj,
+          "comarca",
+          "COMARCA"
+        );
+
+      const setor =
+        campo(
+          obj,
+          "setor",
+          "SETOR"
+        );
+
+      const tipo =
+        campo(
+          obj,
+          "tipo",
+          "TIPO"
+        );
+
+      const numero =
+        campo(
+          obj,
+          "numero",
+          "NUMERO",
+          "telefone",
+          "TELEFONE"
+        );
+
+      const ramal =
+        campo(
+          obj,
+          "ramal",
+          "RAMAL"
+        );
+
+      const whatsapp =
+        campo(
+          obj,
+          "whatsapp",
+          "WHATSAPP"
+        );
+
+      const email =
+        campo(
+          obj,
+          "email",
+          "EMAIL",
+          "E_MAIL"
+        );
+
+      const endereco =
+        campo(
+          obj,
+          "endereco",
+          "ENDERECO"
+        );
+
+      const status =
+        campo(
+          obj,
+          "status",
+          "STATUS"
+        );
+
+      const observacao =
+        campo(
+          obj,
+          "observacao",
+          "OBSERVACAO"
+        );
+
+      if (microrregiao) {
+        campos.push(
+          "Microrregião: " +
+          microrregiao
+        );
+      }
+
+      if (comarca) {
+        campos.push(
+          "Comarca: " +
+          comarca
+        );
+      }
+
+      if (setor) {
+        campos.push(
+          "Setor: " +
+          setor
+        );
+      }
+
+      if (tipo) {
+        campos.push(
+          "Tipo: " +
+          tipo
+        );
+      }
+
+      if (numero) {
+        campos.push(
+          "Telefone: " +
+          numero
+        );
+      }
+
+      if (ramal) {
+        campos.push(
+          "Ramal: " +
+          ramal
+        );
+      }
+
+      if (whatsapp) {
+        campos.push(
+          "WhatsApp: " +
+          whatsapp
+        );
+      }
+
+      if (email) {
+        campos.push(
+          "E-mail: " +
+          email
+        );
+      }
+
+      if (endereco) {
+        campos.push(
+          "Endereço: " +
+          endereco
+        );
+      }
+
+      if (status) {
+        campos.push(
+          "Status: " +
+          status
+        );
+      }
+
+      if (observacao) {
+        campos.push(
+          "Obs: " +
+          observacao
+        );
+      }
+
+      return campos.join(" | ") || "-";
+    }
+
+    const resultado =
+      registros.map(item => {
+        const antes =
+          parseHistorico(item.antes);
+
+        const depois =
+          parseHistorico(item.depois);
+
+        const usuarioJson =
+          parseHistorico(item.usuario);
+
+        const acao =
+          normalizarAcao(
+            item.acao,
+            antes,
+            depois,
+            usuarioJson
+          );
+
+        const snapshot =
+          extrairSnapshot(
+            antes,
+            depois,
+            usuarioJson,
+            item.acao
+          );
+
+        const comarca =
+          campo(
+            snapshot,
+            "comarca",
+            "COMARCA"
+          );
+
+        const setor =
+          campo(
+            snapshot,
+            "setor",
+            "SETOR"
+          );
+
+        const usuario =
+          extrairUsuario(
+            item,
+            usuarioJson
+          );
+
+        let dataFormatada = "-";
+
+        if (item.data) {
+          const data =
+            item.data instanceof Date
+              ? item.data
+              : new Date(item.data);
+
+          if (
+            !isNaN(data.getTime())
+          ) {
+            dataFormatada =
+              Utilities.formatDate(
+                data,
+                Session.getScriptTimeZone(),
+                "dd/MM/yyyy HH:mm:ss"
+              );
+          }
+        }
+
+        return {
+          id: item.id || "",
+          telefoneId:
+            item.telefoneId ||
+            item.telefone_id ||
+            "",
+
+          comarca:
+            String(comarca || "").trim(),
+
+          setor:
+            String(setor || "").trim(),
+
+          data:
+            dataFormatada,
+
+          acao:
+            acao,
+
+          usuario:
+            usuario || "-",
+
+          antes:
+            formatarContato(antes),
+
+          depois:
+            formatarContato(
+              objetoPreenchido(depois)
+                ? depois
+                : snapshot
+            )
+        };
+      });
+
+    return respostaSucesso(
+      resultado
+    );
+
+  } catch (erro) {
+    registrarErroAPI(
+      "LISTAR_HISTORICO_GERAL",
+      erro
+    );
+
+    return respostaErro(erro);
+  }
+}
+
+/**
+ * ==========================================================
+ * E-MAILS
+ * ==========================================================
+ */
+
+function emailValidoAPI(email) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+    .test(
+      normalizarEmail(email)
+    );
+}
+
+function notificarNovaSolicitacao(
+  emailSolicitante,
+  nomeSolicitante,
+  perfilSolicitado
+) {
+  const gestorEmail =
+    obterConfiguracaoAPI(
+      "EMAIL_GESTOR"
+    );
+
+  if (
+    !gestorEmail ||
+    !emailValidoAPI(gestorEmail)
+  ) {
+    registrarInfoAPI(
+      "NOTIFICAR_NOVA_SOLICITACAO",
+      "EMAIL_GESTOR não está configurado."
+    );
+
+    return false;
+  }
+
+  const assunto =
+    "Nova solicitação de acesso - " +
+    nomeSolicitante;
+
+  const corpo =
+    "Foi recebida uma nova solicitação de acesso:\n\n" +
+    "Nome: " +
+    nomeSolicitante +
+    "\n" +
+    "E-mail: " +
+    emailSolicitante +
+    "\n" +
+    "Perfil solicitado: " +
+    perfilSolicitado +
+    "\n\n" +
+    "Acesse a área administrativa:\n" +
+    obterUrlAdmin();
+
+  adicionarEmailPendente(
+    gestorEmail,
+    assunto,
+    corpo
+  );
+
+  return true;
+}
+
+function notificarDecisaoSolicitacao(
+  emailSolicitante,
+  nomeSolicitante,
+  status,
+  perfil
+) {
+  const aprovado =
+    String(status || "")
+      .trim()
+      .toUpperCase() === "APROVADO";
+
+  const assunto =
+    aprovado
+      ? "Acesso administrativo aprovado"
+      : "Acesso administrativo rejeitado";
+
+  let corpo =
+    "Olá " +
+    nomeSolicitante +
+    ",\n\n";
+
+  corpo +=
+    "A sua solicitação de acesso como " +
+    perfil +
+    " foi " +
+    (
+      aprovado
+        ? "aprovada"
+        : "rejeitada"
+    ) +
+    ".\n\n";
+
+  if (aprovado) {
+    corpo +=
+      "Acesse o sistema pelo endereço:\n" +
+      obterUrlAdmin();
+  } else {
+    corpo +=
+      "Você poderá tentar novamente mais tarde.";
+  }
+
+  adicionarEmailPendente(
+    emailSolicitante,
+    assunto,
+    corpo
+  );
+
+  return true;
+}
+
+function obterAbaEmailsPendenteAPI() {
+  const ss =
+    obterPlanilhaAPI();
+
+  let sheet =
+    ss.getSheetByName(
+      CONFIG.SHEETS.EMAILS_PENDENTES
+    );
+
+  if (!sheet) {
+    sheet =
+      ss.insertSheet(
+        CONFIG.SHEETS.EMAILS_PENDENTES
+      );
+  }
+
+  if (sheet.getLastRow() === 0) {
+    sheet.appendRow([
+      "DESTINATARIO",
+      "ASSUNTO",
+      "CORPO"
+    ]);
+  }
+
+  return sheet;
+}
+
+function adicionarEmailPendente(
+  destinatario,
+  assunto,
+  corpo
+) {
+  const destino =
+    normalizarEmail(
+      destinatario
+    );
+
+  const titulo =
+    textoSeguro(
+      assunto
+    );
+
+  const mensagem =
+    String(corpo || "");
+
+  if (
+    !emailValidoAPI(destino) ||
+    !titulo ||
+    !mensagem
+  ) {
+    return false;
+  }
+
+  obterAbaEmailsPendenteAPI()
+    .appendRow([
+      destino,
+      titulo,
+      mensagem
+    ]);
+
+  return true;
+}
+
+function processarFilaDeEmails() {
+  const sheet =
+    obterAbaEmailsPendenteAPI();
+
+  if (sheet.getLastRow() <= 1) {
+    return;
+  }
+
+  const dados =
+    sheet.getDataRange()
+      .getValues();
+
+  for (
+    let i = dados.length - 1;
+    i >= 1;
+    i--
+  ) {
+    const destinatario =
+      normalizarEmail(
+        dados[i][0]
+      );
+
+    const assunto =
+      textoSeguro(
+        dados[i][1]
+      );
+
+    const corpo =
+      String(
+        dados[i][2] || ""
+      );
+
+    if (
+      !emailValidoAPI(
+        destinatario
+      ) ||
+      !assunto ||
+      !corpo
+    ) {
+      sheet.deleteRow(i + 1);
+      continue;
+    }
+
+    try {
+      MailApp.sendEmail(
+        destinatario,
+        assunto,
+        corpo
+      );
+
+      sheet.deleteRow(i + 1);
+    } catch (erro) {
+      registrarErroAPI(
+        "PROCESSAR_FILA_EMAILS",
+        new Error(
+          "Falha ao enviar e-mail para " +
+          destinatario +
+          ": " +
+          (
+            erro.message ||
+            erro
+          )
+        )
+      );
+    }
+  }
+}
+
+function instalarTriggerEmails() {
+  ScriptApp
+    .getProjectTriggers()
+    .forEach(trigger => {
+      if (
+        trigger.getHandlerFunction() ===
+        "processarFilaDeEmails"
+      ) {
+        ScriptApp.deleteTrigger(
+          trigger
+        );
+      }
+    });
+
+  ScriptApp
+    .newTrigger(
+      "processarFilaDeEmails"
+    )
+    .timeBased()
+    .everyMinutes(1)
+    .create();
+
+  return "Gatilho de e-mails instalado.";
+}
+
+/**
+ * ==========================================================
+ * LOG
+ * ==========================================================
+ */
+
+function registrarLog(acao) {
+  try {
+    registrarInfoAPI(
+      textoSeguro(acao),
+      ""
+    );
+
+    return true;
+  } catch (erro) {
+    return false;
+  }
+}
+
+function registrarInfoAPI(
+  acao,
+  mensagem
+) {
+  try {
+    LOG.info(
+      textoSeguro(acao),
+      String(mensagem || "")
+    );
+  } catch (erro) {
+    console.warn(
+      "Falha ao registrar log informativo:",
+      erro
+    );
+  }
+}
+
+function registrarErroAPI(
+  acao,
+  erro
+) {
+  try {
+    const mensagem =
+      erro && erro.message
+        ? erro.message
+        : String(
+            erro ||
+            "Erro desconhecido."
+          );
+
+    LOG.error(
+      textoSeguro(acao),
+      mensagem
+    );
+  } catch (erroLog) {
+    console.warn(
+      "Falha ao registrar log de erro:",
+      erroLog
+    );
+  }
+}
+
+/**
+ * ==========================================================
+ * AUXILIARES
+ * ==========================================================
+ */
+
+function obterPlanilhaAPI() {
+  return DB.getSpreadsheet();
+}
+
+function obterEmailSessaoAPI() {
+  try {
+    const usuario =
+      new AuthService()
+        .usuarioAtual();
+
+    if (
+      usuario &&
+      usuario.email
+    ) {
+      return usuario.email;
+    }
+  } catch (erro) {}
+
+  return AuthService
+    .obterEmailAtivo();
+}
+
+function obterConfiguracaoAPI(chave) {
+  try {
+    const sheet =
+      obterPlanilhaAPI()
+        .getSheetByName(
+          CONFIG.SHEETS.CONFIGURACAO
+        );
+
+    if (!sheet) {
+      return null;
+    }
+
+    const chaveBusca =
+      normalizarChave(chave);
+
+    const dados =
+      sheet.getDataRange()
+        .getValues();
+
+    for (
+      let i = 0;
+      i < dados.length;
+      i++
+    ) {
+      const chaveLinha =
+        normalizarChave(
+          dados[i][0]
+        );
+
+      if (
+        chaveLinha ===
+        chaveBusca
+      ) {
+        const valor =
+          dados[i][1];
+
+        if (
+          valor === null ||
+          valor === undefined ||
+          String(valor).trim() === ""
+        ) {
+          return null;
+        }
+
+        return String(valor).trim();
+      }
+    }
+
+    return null;
+  } catch (erro) {
+    registrarErroAPI(
+      "OBTER_CONFIGURACAO",
+      erro
+    );
+
+    return null;
+  }
+}

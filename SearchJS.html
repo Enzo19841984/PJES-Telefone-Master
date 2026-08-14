@@ -1,0 +1,362 @@
+<script>
+/**
+ * ==========================================================
+ * SISTEMA DE TELEFONES TJES
+ * Arquivo: SearchJS.html
+ * ==========================================================
+ */
+
+let filtroAtual = {
+  texto: "",
+  microrregiao: "",
+  comarca: "",
+  tipo: ""
+};
+
+let pesquisaTimer = null;
+
+function normalizarTextoFront(valor) {
+  return String(
+    valor === null ||
+    valor === undefined
+      ? ""
+      : valor
+  )
+    .normalize("NFD")
+    .replace(
+      /[\u0300-\u036f]/g,
+      ""
+    )
+    .replace(
+      /[^a-zA-Z0-9]/g,
+      ""
+    )
+    .toLowerCase();
+}
+
+function pesquisarAutomaticamente() {
+  const campo =
+    document.getElementById(
+      "campo-pesquisa"
+    );
+
+  filtroAtual.texto =
+    campo
+      ? campo.value
+      : "";
+
+  clearTimeout(
+    pesquisaTimer
+  );
+
+  pesquisaTimer =
+    setTimeout(
+      executarPesquisa,
+      250
+    );
+}
+
+function executarPesquisa() {
+  if (
+    typeof API ===
+      "undefined" ||
+    !API ||
+    typeof API.pesquisarTelefones !==
+      "function"
+  ) {
+    mostrarToast(
+      "Serviço de pesquisa indisponível.",
+      "error"
+    );
+
+    return;
+  }
+
+  API.pesquisarTelefones(
+    filtroAtual.texto,
+    function(resposta) {
+      if (
+        !resposta ||
+        resposta.sucesso !== true
+      ) {
+        mostrarToast(
+          resposta &&
+          resposta.erro
+            ? resposta.erro
+            : "Erro ao pesquisar telefones.",
+          "error"
+        );
+
+        return;
+      }
+
+      const resultado =
+        aplicarFiltrosLocais(
+          resposta.dados
+        );
+
+      renderizarTabela(
+        resultado
+      );
+    },
+    erroPadraoSearch
+  );
+}
+
+function aplicarFiltros() {
+  const microrregiao =
+    document.getElementById(
+      "filtro-microrregiao"
+    );
+
+  const comarca =
+    document.getElementById(
+      "filtro-comarca"
+    );
+
+  const tipo =
+    document.getElementById(
+      "filtro-tipo"
+    );
+
+  filtroAtual.microrregiao =
+    microrregiao
+      ? microrregiao.value
+      : "";
+
+  filtroAtual.comarca =
+    comarca
+      ? comarca.value
+      : "";
+
+  filtroAtual.tipo =
+    tipo
+      ? tipo.value
+      : "";
+
+  executarPesquisa();
+}
+
+function aplicarFiltrosLocais(
+  lista
+) {
+  const dados =
+    Array.isArray(lista)
+      ? lista
+      : [];
+
+  const texto =
+    normalizarTextoFront(
+      filtroAtual.texto
+    );
+
+  const microrregiao =
+    normalizarTextoFront(
+      filtroAtual.microrregiao
+    );
+
+  const comarca =
+    normalizarTextoFront(
+      filtroAtual.comarca
+    );
+
+  const tipo =
+    normalizarTextoFront(
+      filtroAtual.tipo
+    );
+
+  return dados.filter(item => {
+    if (texto) {
+      const conteudo =
+        Object.values(item || {})
+          .map(valor =>
+            normalizarTextoFront(
+              valor
+            )
+          )
+          .join(" ");
+
+      if (
+        !conteudo.includes(texto)
+      ) {
+        return false;
+      }
+    }
+
+    if (
+      microrregiao &&
+      normalizarTextoFront(
+        item.microrregiao
+      ) !== microrregiao
+    ) {
+      return false;
+    }
+
+    if (
+      comarca &&
+      normalizarTextoFront(
+        item.comarca
+      ) !== comarca
+    ) {
+      return false;
+    }
+
+    if (
+      tipo &&
+      normalizarTextoFront(
+        item.tipo
+      ) !== tipo
+    ) {
+      return false;
+    }
+
+    return true;
+  });
+}
+
+function atualizarTabelaComFiltros() {
+  if (
+    typeof listaTelefones ===
+      "undefined"
+  ) {
+    return;
+  }
+
+  renderizarTabela(
+    aplicarFiltrosLocais(
+      listaTelefones
+    )
+  );
+}
+
+function carregarFiltros() {
+  if (
+    typeof listaTelefones ===
+      "undefined" ||
+    !Array.isArray(
+      listaTelefones
+    )
+  ) {
+    return;
+  }
+
+  const regioes =
+    new Set();
+
+  const comarcas =
+    new Set();
+
+  const tipos =
+    new Set();
+
+  listaTelefones.forEach(item => {
+    if (item.microrregiao) {
+      regioes.add(
+        String(
+          item.microrregiao
+        )
+      );
+    }
+
+    if (item.comarca) {
+      comarcas.add(
+        String(item.comarca)
+      );
+    }
+
+    if (item.tipo) {
+      tipos.add(
+        String(item.tipo)
+      );
+    }
+  });
+
+  preencherSelect(
+    "filtro-microrregiao",
+    regioes,
+    "Todas as microrregiões"
+  );
+
+  preencherSelect(
+    "filtro-comarca",
+    comarcas,
+    "Todas as comarcas"
+  );
+
+  preencherSelect(
+    "filtro-tipo",
+    tipos,
+    "Todos os tipos"
+  );
+}
+
+function preencherSelect(
+  id,
+  valores,
+  textoTodos
+) {
+  const select =
+    document.getElementById(id);
+
+  if (!select) {
+    return;
+  }
+
+  const valorAtual =
+    select.value;
+
+  select.textContent =
+    "";
+
+  const opcaoTodos =
+    document.createElement(
+      "option"
+    );
+
+  opcaoTodos.value =
+    "";
+
+  opcaoTodos.textContent =
+    textoTodos || "Todos";
+
+  select.appendChild(
+    opcaoTodos
+  );
+
+  Array.from(valores || [])
+    .sort((a, b) =>
+      String(a).localeCompare(
+        String(b),
+        "pt-BR"
+      )
+    )
+    .forEach(valor => {
+      const opcao =
+        document.createElement(
+          "option"
+        );
+
+      opcao.value =
+        String(valor);
+
+      opcao.textContent =
+        String(valor);
+
+      select.appendChild(
+        opcao
+      );
+    });
+
+  select.value =
+    valorAtual;
+}
+
+function erroPadraoSearch(erro) {
+  mostrarToast(
+    erro && erro.message
+      ? erro.message
+      : "Erro ao pesquisar telefones.",
+    "error"
+  );
+}
+</script>

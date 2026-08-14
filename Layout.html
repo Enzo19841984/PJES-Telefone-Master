@@ -1,0 +1,91 @@
+<!--
+==========================================================
+SISTEMA DE TELEFONES TJES
+Arquivo: Layout.html
+==========================================================
+-->
+
+<div class="app-container">
+  <aside id="sidebar-container">
+    <?!= include("Sidebar"); ?>
+  </aside>
+
+  <main class="main-container">
+    <header class="topbar">
+      <div class="system-title">
+        <h1>SISTEMA INTELIGENTE DE GESTÃO DE TELEFONES DO PJES</h1>
+      </div>
+
+      <div id="user-info" class="user-info"></div>
+    </header>
+
+    <section id="dashboard-view" class="view">
+      <?!= include("Dashboard"); ?>
+    </section>
+
+    <section id="consulta-telefones-view" class="view hidden">
+      <?!= include("ConsultarTelefones"); ?>
+    </section>
+
+    <section id="registro-alteracoes-view" class="view hidden">
+      <div id="registro-alteracoes-container"></div>
+    </section>
+
+    <section id="solicitacoes-view" class="view hidden">
+      <?!= include("Solicitacoes"); ?>
+    </section>
+
+    <section id="configuracoes-view" class="view hidden">
+      <div class="page-header">
+        <div>
+          <h2>Configurações</h2>
+          <p>Informações e parâmetros gerais do sistema</p>
+        </div>
+      </div>
+
+      <div class="panel configuracoes-panel">
+
+        <div class="configuracao-item">
+          <div>
+            <strong>Aparência</strong>
+            <p>Escolha o modo de exibição do sistema.</p>
+          </div>
+
+          <label class="switch">
+            <input id="toggle-dark-mode" type="checkbox" onchange="alternarModoEscuro(this.checked)">
+            <span class="slider"></span>
+          </label>
+        </div>
+
+        <hr>
+
+        <div class="configuracao-sistema">
+          <h3>Sistema Inteligente de Gestão de Telefones do Poder Judiciário do Estado do Espírito Santo</h3>
+
+          <p>
+            <strong>Versão:</strong>
+            <?= sistemaVersao ?>
+          </p>
+
+          <p>
+            <strong>Ambiente:</strong>
+            Google Apps Script Web App
+          </p>
+
+          <p>
+            <strong>Status da Base de Dados:</strong>
+            Conectado
+          </p>
+        </div>
+
+      </div>
+    </section>
+
+    <section id="historico-view" class="view hidden">
+      <div id="historico-container"></div>
+    </section>
+  </main>
+</div>
+
+<?!= include("ModalTelefone"); ?>
+<?!= include("ModalAcesso"); ?>
