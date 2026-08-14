@@ -152,13 +152,25 @@ function atualizarInterfaceUsuario() {
     document.getElementById("sidebar-user");
 
   if (sidebarUser) {
-    sidebarUser.textContent =
-      "Perfil: " +
-      formatarPerfil(
-        logado
-          ? perfil
-          : "USUARIO_CONSULTA"
-      );
+    var emailSessao = String(
+      (typeof window.SESSAO_EMAIL !== "undefined" && window.SESSAO_EMAIL) || ""
+    ).trim();
+
+    if (logado) {
+      sidebarUser.textContent =
+        "👤 " +
+        email +
+        "\nPerfil: " +
+        formatarPerfil(perfil);
+    } else if (emailSessao) {
+      sidebarUser.textContent =
+        "👤 " +
+        emailSessao +
+        "\nSem cargo administrativo";
+    } else {
+      sidebarUser.textContent =
+        "Perfil: Usuário de Consulta";
+    }
   }
 
   const btnAcesso =

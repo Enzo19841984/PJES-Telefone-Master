@@ -452,7 +452,7 @@ function abrirComboboxComarca() {
     liVazio.textContent = "Nenhuma comarca encontrada";
     lista.appendChild(liVazio);
   } else {
-    filtradas.slice(0, 10).forEach(function(nome) {
+    filtradas.forEach(function(nome) {
       var li = document.createElement("li");
       li.setAttribute("role", "option");
       li.textContent = nome;
