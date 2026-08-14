@@ -65,9 +65,30 @@ function iniciarSistema() {
     usuarioAtual = usuarioVisitante();
   }
 
-  atualizarInterfaceUsuario();
-  carregarTelefones();
-  iniciarDarkMode();
+  /*
+   * A ativação da interface nunca pode ser bloqueada por um erro
+   * em uma rotina secundária (ex.: dark mode) — cada etapa é
+   * protegida individualmente.
+   */
+  try {
+    atualizarInterfaceUsuario();
+  } catch (erro) {
+    console.error("Falha ao atualizar interface:", erro);
+  }
+
+  try {
+    carregarTelefones();
+  } catch (erro) {
+    console.error("Falha ao carregar telefones:", erro);
+  }
+
+  try {
+    if (typeof iniciarDarkMode === "function") {
+      iniciarDarkMode();
+    }
+  } catch (erro) {
+    console.error("Falha ao iniciar dark mode:", erro);
+  }
 
   /*
    * Atualiza os dados completos da sessão (nome, comarcas
@@ -361,15 +382,15 @@ function formatarPerfil(perfil) {
   }
 }
 
-/**
- * "Entrar": recarrega a página atual.
- *
- * Com a implantação "Qualquer pessoa com conta Google", o próprio
- * Google pede a conta ao carregar o app — não precisamos navegar
- * para URLs externas (que podiam estar desatualizadas no CONFIG).
- */
 function fazerLogin() {
-  window.top.location.reload();
+  /*
+   * Recarrega a PRÓPRIA janela (window.location, não window.top):
+   * o app pode estar em um iframe (preview do editor, Google Sites)
+   * onde acessar window.top é bloqueado por política de origem.
+   * Com a implantação "Qualquer pessoa com conta Google", o próprio
+   * Google pede a conta ao carregar o app.
+   */
+  window.location.reload();
 }
 
 /**
@@ -399,7 +420,7 @@ function tratarCliqueAcesso() {
     return;
   }
 
-  window.top.location.href =
+  window.location.href =
     "https://accounts.google.com/logout?continue=" +
     encodeURIComponent(destino);
 }
@@ -497,6 +518,10 @@ function abrirConfiguracoes() {
  * DARK MODE
  * ----------------------------------------------------------
  */
+
+function iniciarDarkMode() {
+  aplicarModoEscuro();
+}
 
 function aplicarModoEscuro() {
   const ativo =
