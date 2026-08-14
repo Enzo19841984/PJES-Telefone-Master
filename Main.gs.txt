@@ -19,6 +19,22 @@ function doGet(e) {
       ? obterUsuarioAdmin(email)
       : null;
 
+  /*
+   * Auditoria de acesso: registra na aba LOG o que o servidor
+   * enxergou — e-mail identificado e cargo concedido (ou não).
+   * Útil para diagnosticar "entrei e continuo visitante".
+   */
+  if (email && emailInstitucional(email)) {
+    try {
+      LOG.info(
+        usuario ? "ACESSO_ADMIN_OK" : "ACESSO_ADMIN_SEM_CARGO",
+        email + (usuario ? " -> " + usuario.perfil : " (sem cargo ativo na aba USUARIOS)")
+      );
+    } catch (erroLog) {
+      console.warn("Falha ao registrar acesso:", erroLog);
+    }
+  }
+
   if (usuario) {
     return carregarAplicacaoAdministrativa(usuario);
   }
