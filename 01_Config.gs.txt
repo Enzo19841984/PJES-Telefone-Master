@@ -8,19 +8,23 @@
 const CONFIG = {
   SISTEMA: {
     NOME: "Sistema Inteligente de Gestão de Telefones do Poder Judiciário do Estado do Espírito Santo",
-    VERSAO: "2.5"
+    VERSAO: "2.6"
   },
 
   WEB_APP: {
     /**
      * URL ÚNICA do sistema (versão única).
      *
+     * MANTENHA ESTA URL ATUALIZADA: use sempre a URL da
+     * implantação Web App em uso (Implantar > Gerenciar
+     * implantações > copiar URL do App da Web).
+     *
      * O acesso administrativo é definido pela conta Google ativa:
      * quem possui perfil GESTOR_SISTEMA ou GESTOR_CONTEUDO ativo na
      * aba USUARIOS entra automaticamente; os demais usam o sistema
      * como visitante e podem solicitar acesso pelo formulário.
      */
-    URL_PUBLICA: "https://script.google.com/macros/s/AKfycbzaathk7D0CWdI_Vx_a1eIcgJwXnFqGK5wh7goK3GxUkE5CwSSvPIsbYb5sk5vikMZH/exec",
+    URL_PUBLICA: "https://script.google.com/macros/s/AKfycbxvv83bMKSzHkZN_aDvzHdiI1z7KMB4DM-lynPVJOLDAtFaqYQhPJ3_BNuWo9ed2uoO/exec",
 
     /**
      * Deixe false para evitar que o sistema seja colocado

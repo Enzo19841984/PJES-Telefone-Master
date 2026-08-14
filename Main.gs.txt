@@ -163,11 +163,28 @@ function escaparHtmlServidor(valor) {
 
 function obterUrlSistema() {
   /*
-   * Usa a URL da implantação REAL que está servindo a requisição.
-   * Isso elimina o problema de URL antiga/removida no CONFIG:
-   * os e-mails e o botão de login sempre apontam para a implantação
-   * em uso, nunca para uma URL desatualizada.
+   * Ordem de preferência:
+   * 1. CONFIG.WEB_APP.URL_PUBLICA — fonte da verdade, mantida
+   *    atualizada pelo mantenedor (a URL da implantação em uso);
+   * 2. ScriptApp.getService().getUrl() — apenas como reserva,
+   *    pois com múltiplas implantações no projeto ele retorna a
+   *    PRIMEIRA implantação (que pode estar arquivada/morta).
    */
+  const configurada =
+    String(
+      CONFIG.WEB_APP && CONFIG.WEB_APP.URL_PUBLICA
+        ? CONFIG.WEB_APP.URL_PUBLICA
+        : ""
+    ).trim();
+
+  if (
+    configurada &&
+    /^https:\/\/script\.google\.com\/macros\/s\//.test(configurada) &&
+    !configurada.includes("ID_PUBLICO")
+  ) {
+    return configurada;
+  }
+
   try {
     const urlServico = ScriptApp.getService().getUrl();
 
@@ -178,12 +195,11 @@ function obterUrlSistema() {
     console.warn("Falha ao obter URL do serviço:", erro);
   }
 
-  const base = String(CONFIG.WEB_APP && CONFIG.WEB_APP.URL_PUBLICA ? CONFIG.WEB_APP.URL_PUBLICA : "").trim();
-  if (!base) throw new Error("URL_PUBLICA não foi configurada no CONFIG.");
-  if (base.includes("ID_PUBLICO")) {
-    throw new Error("Substitua o ID fictício pela URL real da implantação.");
+  if (!configurada) {
+    throw new Error("URL_PUBLICA não foi configurada no CONFIG.");
   }
-  return base;
+
+  return configurada;
 }
 
 function obterUrlAlternarConta() {
