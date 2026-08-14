@@ -1816,8 +1816,8 @@ function notificarNovaSolicitacao(
   }
 
   corpo +=
-    "\nAcesse o sistema:\n" +
-    obterUrlSistema();
+    "\nAcesse a área administrativa:\n" +
+    obterUrlAdmin();
 
   adicionarEmailPendente(
     gestorEmail,

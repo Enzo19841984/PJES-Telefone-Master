@@ -295,7 +295,9 @@ function atualizarInterfaceUsuario() {
           fundo: "#fef3c7",
           borda: "#f59e0b",
           cor: "#92400e",
-          acao: fazerLogin
+          acao: window.EH_CONTEXTO_ADMIN === true
+            ? fazerLogin
+            : irParaAdmin
         }
       );
     }
@@ -402,20 +404,44 @@ function formatarPerfil(perfil) {
   }
 }
 
+/**
+ * Da implantação pública (anônima) para a administrativa.
+ */
+function irParaAdmin() {
+  var destino = String(
+    (typeof window.URL_ADMIN !== "undefined" && window.URL_ADMIN) || ""
+  ).trim();
+
+  if (!destino) {
+    mostrarToast("URL administrativa não configurada.", "error");
+    return;
+  }
+
+  window.location.href = destino;
+}
+
 function fazerLogin() {
   /*
    * Várias contas Google logadas no navegador: o Google pode usar
    * a conta errada (ex.: conta pessoal), deixando o usuário como
    * visitante. O seletor de contas com dica de domínio institucional
    * (hd=) força a escolha da conta @<dominio>.
+   *
+   * continue usa a URL ADMINISTRATIVA canônica (nunca a URL do
+   * iframe script.googleusercontent.com — que o Google rejeita
+   * com erro 400).
    */
   var dominio = String(
     (typeof window.DOMINIO_INSTITUCIONAL !== "undefined" && window.DOMINIO_INSTITUCIONAL) || ""
   ).trim();
 
   var destino =
-    String(window.location.href || "").trim() ||
-    String(window.URL_SISTEMA || "").trim();
+    String(
+      (typeof window.URL_ADMIN !== "undefined" && window.URL_ADMIN) || ""
+    ).trim() ||
+    String(
+      (typeof window.URL_SISTEMA !== "undefined" && window.URL_SISTEMA) || ""
+    ).trim();
 
   if (!destino) {
     mostrarToast("URL do sistema não disponível.", "error");
@@ -434,14 +460,19 @@ function fazerLogin() {
 }
 
 /**
- * "SAIR" no modelo de versão única: como o acesso é definido
+ * "SAIR" no modelo de duas implantações: como o acesso é definido
  * pela conta Google ativa, sair significa trocar de conta.
- * Redireciona para o logout do Google e volta ao sistema.
+ *
+ * continue usa a URL ADMINISTRATIVA canônica (nunca a URL do iframe
+ * script.googleusercontent.com — o Google rejeita com erro 400).
  */
 function tratarCliqueAcesso() {
   const destino =
     String(
-      window.location.href || ""
+      (typeof window.URL_ADMIN !== "undefined" && window.URL_ADMIN) || ""
+    ).trim() ||
+    String(
+      (typeof window.URL_SISTEMA !== "undefined" && window.URL_SISTEMA) || ""
     ).trim();
 
   if (!destino) {

@@ -7,24 +7,40 @@
 
 function doGet(e) {
   /*
-   * Versão única: não existe mais URL pública × URL privada.
-   * O acesso administrativo é definido pela conta Google ativa:
-   * se ela possui perfil GESTOR_SISTEMA ou GESTOR_CONTEUDO ativo
-   * na aba USUARIOS, o usuário entra automaticamente no cargo.
+   * Duas implantações do MESMO projeto (mesma versão):
+   * - URL_PUBLICA (anônima): qualquer pessoa consulta sem login;
+   * - URL_ADMIN (conta Google): quem tem cargo ativo em USUARIOS
+   *   entra automaticamente; os demais permanecem visitantes.
    */
+  const servindo = obterUrlServindo();
+
+  const urlAdminConfig =
+    String(
+      CONFIG.WEB_APP && CONFIG.WEB_APP.URL_ADMIN
+        ? CONFIG.WEB_APP.URL_ADMIN
+        : ""
+    ).trim();
+
+  const ehContextoAdmin =
+    Boolean(
+      servindo &&
+      urlAdminConfig &&
+      normalizarChave(servindo) === normalizarChave(urlAdminConfig)
+    );
+
   const email = AuthService.obterEmailAtivo();
 
   const usuario =
-    email && emailInstitucional(email)
+    ehContextoAdmin && email && emailInstitucional(email)
       ? obterUsuarioAdmin(email)
       : null;
 
   /*
-   * Auditoria de acesso: registra na aba LOG o que o servidor
-   * enxergou — e-mail identificado e cargo concedido (ou não).
-   * Útil para diagnosticar "entrei e continuo visitante".
+   * Auditoria de acesso (somente na implantação administrativa):
+   * registra na aba LOG o que o servidor enxergou — e-mail
+   * identificado e cargo concedido (ou não).
    */
-  if (email && emailInstitucional(email)) {
+  if (ehContextoAdmin && email && emailInstitucional(email)) {
     try {
       LOG.info(
         usuario ? "ACESSO_ADMIN_OK" : "ACESSO_ADMIN_SEM_CARGO",
@@ -35,15 +51,35 @@ function doGet(e) {
     }
   }
 
-  if (usuario) {
+  if (ehContextoAdmin && usuario) {
     return carregarAplicacaoAdministrativa(usuario);
   }
 
-  return carregarAplicacaoPublica(email || "");
+  return carregarAplicacaoPublica(
+    ehContextoAdmin ? email || "" : ""
+  );
+}
+
+/**
+ * URL da implantação que está servindo esta requisição.
+ */
+function obterUrlServindo() {
+  try {
+    const url = ScriptApp.getService().getUrl();
+
+    if (url && /^https:\/\/script\.google\.com\/macros\/s\//.test(url)) {
+      return url;
+    }
+  } catch (erro) {
+    console.warn("Falha ao obter URL do serviço:", erro);
+  }
+
+  return "";
 }
 
 function prepararTemplateAplicacao(template) {
   template.urlSistema = obterUrlSistema();
+  template.urlAdmin = obterUrlAdmin();
   template.sistemaNome = CONFIG.SISTEMA.NOME;
   template.sistemaVersao = CONFIG.SISTEMA.VERSAO;
   template.dominioInstitucional = CONFIG.AUTH.DOMINIO_INSTITUCIONAL;
@@ -75,6 +111,7 @@ function carregarAplicacaoPublica(email) {
   template.perfilAdmin = "";
   template.sessaoEmail = textoSeguro(email);
   template.mostrarModalAcesso = false;
+  template.ehContextoAdmin = Boolean(email);
 
   return finalizarTemplate(template, CONFIG.SISTEMA.NOME);
 }
@@ -89,6 +126,7 @@ function carregarAplicacaoAdministrativa(usuario) {
   template.perfilAdmin = usuario.perfil;
   template.sessaoEmail = usuario.email;
   template.mostrarModalAcesso = false;
+  template.ehContextoAdmin = true;
 
   return finalizarTemplate(template, CONFIG.SISTEMA.NOME);
 }
@@ -164,12 +202,8 @@ function escaparHtmlServidor(valor) {
 
 function obterUrlSistema() {
   /*
-   * Ordem de preferência:
-   * 1. CONFIG.WEB_APP.URL_PUBLICA — fonte da verdade, mantida
-   *    atualizada pelo mantenedor (a URL da implantação em uso);
-   * 2. ScriptApp.getService().getUrl() — apenas como reserva,
-   *    pois com múltiplas implantações no projeto ele retorna a
-   *    PRIMEIRA implantação (que pode estar arquivada/morta).
+   * URL pública (anônima) — fonte da verdade em CONFIG;
+   * reserva: URL da implantação que está servindo.
    */
   const configurada =
     String(
@@ -181,19 +215,15 @@ function obterUrlSistema() {
   if (
     configurada &&
     /^https:\/\/script\.google\.com\/macros\/s\//.test(configurada) &&
-    !configurada.includes("ID_PUBLICO")
+    !configurada.includes("PUBLICA_EM_BRANCO")
   ) {
     return configurada;
   }
 
-  try {
-    const urlServico = ScriptApp.getService().getUrl();
+  const servindo = obterUrlServindo();
 
-    if (urlServico && /^https:\/\/script\.google\.com\/macros\/s\//.test(urlServico)) {
-      return urlServico;
-    }
-  } catch (erro) {
-    console.warn("Falha ao obter URL do serviço:", erro);
+  if (servindo) {
+    return servindo;
   }
 
   if (!configurada) {
@@ -201,6 +231,27 @@ function obterUrlSistema() {
   }
 
   return configurada;
+}
+
+/**
+ * URL administrativa (conta Google) — onde o gestor faz login.
+ */
+function obterUrlAdmin() {
+  const configurada =
+    String(
+      CONFIG.WEB_APP && CONFIG.WEB_APP.URL_ADMIN
+        ? CONFIG.WEB_APP.URL_ADMIN
+        : ""
+    ).trim();
+
+  if (
+    configurada &&
+    /^https:\/\/script\.google\.com\/macros\/s\//.test(configurada)
+  ) {
+    return configurada;
+  }
+
+  return obterUrlSistema();
 }
 
 function obterUrlAlternarConta() {
@@ -223,6 +274,7 @@ function include(nomeArquivo) {
   template.sistemaNome = CONFIG.SISTEMA.NOME;
   template.sistemaVersao = CONFIG.SISTEMA.VERSAO;
   template.urlSistema = obterUrlSistema();
+  template.urlAdmin = obterUrlAdmin();
   template.dominioInstitucional = CONFIG.AUTH.DOMINIO_INSTITUCIONAL;
   template.mostrarModalAcesso = false;
   return template.evaluate().getContent();

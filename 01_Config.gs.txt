@@ -8,23 +8,27 @@
 const CONFIG = {
   SISTEMA: {
     NOME: "Sistema Inteligente de Gestão de Telefones do Poder Judiciário do Estado do Espírito Santo",
-    VERSAO: "2.8"
+    VERSAO: "2.9"
   },
 
   WEB_APP: {
     /**
-     * URL ÚNICA do sistema (versão única).
+     * DUAS IMPLANTAÇÕES do MESMO projeto (mesma versão de código):
      *
-     * MANTENHA ESTA URL ATUALIZADA: use sempre a URL da
-     * implantação Web App em uso (Implantar > Gerenciar
-     * implantações > copiar URL do App da Web).
+     * URL_PUBLICA — acesso ANÔNIMO ("Qualquer pessoa", sem conta
+     *   Google): visitantes consultam os telefones sem login.
+     *   Crie com: Executar como "Eu" + Quem pode acessar
+     *   "Qualquer pessoa" (anônimo) + Versão "Nova".
      *
-     * O acesso administrativo é definido pela conta Google ativa:
-     * quem possui perfil GESTOR_SISTEMA ou GESTOR_CONTEUDO ativo na
-     * aba USUARIOS entra automaticamente; os demais usam o sistema
-     * como visitante e podem solicitar acesso pelo formulário.
+     * URL_ADMIN — acesso com conta Google ("Qualquer pessoa com
+     *   uma Conta do Google"): quem tem cargo ativo em USUARIOS
+     *   entra automaticamente; os demais permanecem visitantes.
+     *
+     * MANTENHA AS DUAS URLs ATUALIZADAS AQUI (Implantar >
+     * Gerenciar implantações > copiar URL do App da Web).
      */
     URL_PUBLICA: "https://script.google.com/macros/s/AKfycbxvv83bMKSzHkZN_aDvzHdiI1z7KMB4DM-lynPVJOLDAtFaqYQhPJ3_BNuWo9ed2uoO/exec",
+    URL_ADMIN: "https://script.google.com/macros/s/AKfycbxvv83bMKSzHkZN_aDvzHdiI1z7KMB4DM-lynPVJOLDAtFaqYQhPJ3_BNuWo9ed2uoO/exec",
 
     /**
      * Deixe false para evitar que o sistema seja colocado
