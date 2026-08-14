@@ -2203,14 +2203,27 @@ function listarUsuarios() {
     const idxAtivo = mapa.ATIVO;
     const idxComarcas = mapa.COMARCAS;
 
+    /*
+     * Visitantes (USUARIO_CONSULTA) não aparecem na lista:
+     * a lista gerencia pessoas com acesso administrativo.
+     */
     const resultado =
-      dados.map(linha => ({
-        email: textoSeguro(linha[0]),
-        nome: textoSeguro(idxNome ? linha[idxNome - 1] : ""),
-        perfil: String(idxPerfil ? linha[idxPerfil - 1] : "").trim().toUpperCase(),
-        ativo: paraBoolean(idxAtivo ? linha[idxAtivo - 1] : false),
-        comarcas: idxComarcas !== undefined ? textoSeguro(linha[idxComarcas - 1]) : ""
-      }));
+      dados
+        .filter(linha => {
+          const perfil =
+            String(idxPerfil ? linha[idxPerfil - 1] : "")
+              .trim()
+              .toUpperCase();
+
+          return perfil !== CONFIG.PERFIS.USUARIO_CONSULTA;
+        })
+        .map(linha => ({
+          email: textoSeguro(linha[0]),
+          nome: textoSeguro(idxNome ? linha[idxNome - 1] : ""),
+          perfil: String(idxPerfil ? linha[idxPerfil - 1] : "").trim().toUpperCase(),
+          ativo: paraBoolean(idxAtivo ? linha[idxAtivo - 1] : false),
+          comarcas: idxComarcas !== undefined ? textoSeguro(linha[idxComarcas - 1]) : ""
+        }));
 
     return respostaSucesso(resultado);
   } catch (erro) {
@@ -2263,6 +2276,16 @@ function atualizarUsuario(email, dados) {
 
     const entrada = ehObjeto(dados) ? dados : {};
 
+    const possuiNome =
+      possuiCampo(entrada, "nome", "NOME");
+
+    const nomeNovo =
+      possuiNome
+        ? textoSeguro(
+            valorObjeto(entrada, "nome", "NOME")
+          )
+        : null;
+
     const perfilNovo =
       String(
         valorObjeto(entrada, "perfil", "PERFIL")
@@ -2284,11 +2307,6 @@ function atualizarUsuario(email, dados) {
     const ativoNovo =
       paraBoolean(
         valorObjeto(entrada, "ativo", "ATIVO")
-      );
-
-    const nomeNovo =
-      textoSeguro(
-        valorObjeto(entrada, "nome", "NOME")
       );
 
     const comarcasNovo =
@@ -2374,7 +2392,7 @@ function atualizarUsuario(email, dados) {
       }
     }
 
-    if (idxNome !== undefined) {
+    if (idxNome !== undefined && nomeNovo !== null) {
       sheet.getRange(linhaEncontrada, idxNome).setValue(nomeNovo);
     }
 
