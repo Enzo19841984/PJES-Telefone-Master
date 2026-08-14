@@ -114,6 +114,48 @@ function iniciarSistema() {
           };
 
           atualizarInterfaceUsuario();
+
+          /*
+           * As comarcas chegam de forma assíncrona:
+           * re-renderiza a tabela e os filtros para que
+           * os botões de edição reflitam a permissão.
+           */
+          try {
+            if (
+              typeof atualizarTabelaComFiltros ===
+              "function"
+            ) {
+              atualizarTabelaComFiltros();
+            } else if (
+              typeof renderizarTabela ===
+                "function" &&
+              typeof listaTelefones !==
+                "undefined"
+            ) {
+              renderizarTabela(
+                listaTelefones
+              );
+            }
+          } catch (erro) {
+            console.error(
+              "Falha ao atualizar tabela:",
+              erro
+            );
+          }
+
+          try {
+            if (
+              typeof carregarFiltros ===
+              "function"
+            ) {
+              carregarFiltros();
+            }
+          } catch (erro) {
+            console.error(
+              "Falha ao atualizar filtros:",
+              erro
+            );
+          }
         }
       },
       function() {}

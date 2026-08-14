@@ -480,6 +480,26 @@ function salvarTelefone() {
     return;
   }
 
+  const comarcaFormulario =
+    String(
+      dados.comarca || ""
+    ).trim();
+
+  if (
+    typeof podeEditarComarca ===
+      "function" &&
+    !podeEditarComarca(
+      comarcaFormulario
+    )
+  ) {
+    exibirNotificacao(
+      "Você só pode salvar telefones nas suas comarcas.",
+      "error"
+    );
+
+    return;
+  }
+
   const modoEdicao =
     Boolean(
       telefoneEditando
@@ -589,6 +609,23 @@ function abrirEditarTelefone(id) {
   if (!telefone) {
     mostrarToast(
       "Telefone não encontrado.",
+      "error"
+    );
+
+    return;
+  }
+
+  if (
+    typeof podeEditarComarca ===
+      "function" &&
+    !podeEditarComarca(
+      String(
+        telefone.comarca || ""
+      ).trim()
+    )
+  ) {
+    mostrarToast(
+      "Você só pode editar telefones das suas comarcas.",
       "error"
     );
 

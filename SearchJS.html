@@ -271,6 +271,30 @@ function carregarFiltros() {
     }
   });
 
+  /*
+   * Gestor de conteúdo limitado a comarcas: o filtro
+   * de comarca só oferece as comarcas dele.
+   */
+  const permitidas =
+    typeof comarcasPermitidasDoUsuario ===
+    "function"
+      ? comarcasPermitidasDoUsuario()
+      : null;
+
+  const comarcasFiltro =
+    permitidas === null
+      ? comarcas
+      : new Set(
+          Array.from(comarcas).filter(
+            comarca =>
+              permitidas.includes(
+                normalizarChaveTabela(
+                  comarca
+                )
+              )
+          )
+        );
+
   preencherSelect(
     "filtro-microrregiao",
     regioes,
@@ -279,7 +303,7 @@ function carregarFiltros() {
 
   preencherSelect(
     "filtro-comarca",
-    comarcas,
+    comarcasFiltro,
     "Todas as comarcas"
   );
 

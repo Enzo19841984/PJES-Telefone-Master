@@ -53,6 +53,67 @@ function normalizarChaveTabela(valor) {
     .toUpperCase();
 }
 
+/**
+ * Comarcas em que o usuário logado pode editar telefones.
+ *
+ * - GESTOR_SISTEMA: todas (null).
+ * - GESTOR_CONTEUDO: somente as da coluna COMARCAS
+ *   (lista vazia = todas, retorna null).
+ * - Demais perfis: nenhuma ([]).
+ */
+function comarcasPermitidasDoUsuario() {
+  if (
+    typeof usuarioAtual === "undefined" ||
+    !usuarioAtual
+  ) {
+    return [];
+  }
+
+  const perfil =
+    usuarioAtual.perfil || "";
+
+  if (perfil === "GESTOR_SISTEMA") {
+    return null;
+  }
+
+  if (perfil !== "GESTOR_CONTEUDO") {
+    return [];
+  }
+
+  const comarcas =
+    Array.isArray(usuarioAtual.comarcas)
+      ? usuarioAtual.comarcas
+      : [];
+
+  if (comarcas.length === 0) {
+    return null;
+  }
+
+  return comarcas.map(item =>
+    normalizarChaveTabela(item)
+  );
+}
+
+/**
+ * Indica se o usuário atual pode editar/excluir
+ * telefones da comarca informada.
+ */
+function podeEditarComarca(comarca) {
+  const permitidas =
+    comarcasPermitidasDoUsuario();
+
+  // null = todas as comarcas
+  if (permitidas === null) {
+    return true;
+  }
+
+  return permitidas.includes(
+    normalizarChaveTabela(
+      comarca || ""
+    )
+  );
+}
+
 function valorCampoTelefone(
   item,
   ...nomes
@@ -553,6 +614,11 @@ function renderizarTabela(
         )
       );
 
+    const permitidoEditar =
+      podeEditarComarca(
+        comarca
+      );
+
     const numero =
       textoTabela(
         valorCampoTelefone(
@@ -667,29 +733,52 @@ function renderizarTabela(
       grupo.style.flexWrap =
         "wrap";
 
-      grupo.appendChild(
-        criarBotaoTabela(
-          "✏️ Editar",
-          "btn-primary",
-          function() {
-            abrirEditarTelefone(
-              id
-            );
-          }
-        )
-      );
+      if (permitidoEditar) {
+        grupo.appendChild(
+          criarBotaoTabela(
+            "✏️ Editar",
+            "btn-primary",
+            function() {
+              abrirEditarTelefone(
+                id
+              );
+            }
+          )
+        );
 
-      grupo.appendChild(
-        criarBotaoTabela(
-          "🗑️ Excluir",
-          "btn-danger",
-          function() {
-            abrirExcluir(
-              id
-            );
-          }
-        )
-      );
+        grupo.appendChild(
+          criarBotaoTabela(
+            "🗑️ Excluir",
+            "btn-danger",
+            function() {
+              abrirExcluir(
+                id
+              );
+            }
+          )
+        );
+      } else {
+        const cadeado =
+          document.createElement(
+            "span"
+          );
+
+        cadeado.textContent =
+          "🔒";
+
+        cadeado.title =
+          "Você só pode editar telefones das suas comarcas.";
+
+        cadeado.style.fontSize =
+          "14px";
+
+        cadeado.style.opacity =
+          "0.55";
+
+        grupo.appendChild(
+          cadeado
+        );
+      }
 
       grupo.appendChild(
         criarBotaoTabela(
@@ -780,6 +869,25 @@ function abrirExcluir(id) {
 
   const telefone =
     encontrarTelefone(idBusca);
+
+  if (
+    telefone &&
+    !podeEditarComarca(
+      textoTabela(
+        telefone.comarca
+      )
+    )
+  ) {
+    idTelefoneParaExcluir =
+      null;
+
+    notificarTabela(
+      "Você só pode excluir telefones das suas comarcas.",
+      "error"
+    );
+
+    return;
+  }
 
   const mensagem =
     document.getElementById(
