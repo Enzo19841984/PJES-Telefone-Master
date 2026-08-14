@@ -39,6 +39,63 @@ function mensagemErroFrontend(erro, fallback) {
  * O DashboardJS utiliza a mesma resposta para alimentar
  * o dashboard e a consulta.
  */
+function emPreviewEditor() {
+  /*
+   * Detecta o preview do editor Apps Script (iframe
+   * userCodeAppPanel). Nele o Google NÃO expõe a identidade
+   * do usuário — login administrativo nunca funciona ali.
+   */
+  try {
+    return /userCodeAppPanel/i.test(
+      window.location.pathname || ""
+    );
+  } catch (erro) {
+    return false;
+  }
+}
+
+function mostrarAvisoPreview() {
+  var app = document.getElementById("app");
+  if (!app || document.getElementById("aviso-preview")) return;
+
+  var url = String(
+    (typeof window.URL_SISTEMA !== "undefined" && window.URL_SISTEMA) || ""
+  ).trim();
+
+  var aviso = document.createElement("div");
+  aviso.id = "aviso-preview";
+  aviso.style.cssText =
+    "padding:14px 18px;margin:0 0 12px;background:#fef3c7;" +
+    "border:2px solid #f59e0b;border-radius:10px;color:#92400e;" +
+    "font-size:13px;font-weight:600;line-height:1.6;";
+
+  aviso.innerHTML =
+    "⚠️ <b>Você está no preview do editor Apps Script.</b> " +
+    "O login administrativo <b>não funciona aqui</b> — o Google não " +
+    "expõe a identidade da conta neste ambiente. " +
+    "Abra a URL real de implantação em uma nova aba" +
+    (url ? ": <a href=\"" + url + "\" target=\"_blank\" rel=\"noopener\" style=\"color:#92400e;text-decoration:underline;\">" + url + "</a>" : ".");
+
+  app.insertBefore(aviso, app.firstChild);
+}
+
+function abrirUrlReal() {
+  var url = String(
+    (typeof window.URL_SISTEMA !== "undefined" && window.URL_SISTEMA) || ""
+  ).trim();
+
+  if (!url) {
+    mostrarToast("URL real de implantação não disponível.", "error");
+    return;
+  }
+
+  try {
+    window.open(url, "_blank", "noopener");
+  } catch (erro) {
+    mostrarToast("Abra esta URL em uma nova aba: " + url, "info");
+  }
+}
+
 function iniciarSistema() {
   /*
    * A sessão administrativa chega pronta do servidor:
@@ -88,6 +145,29 @@ function iniciarSistema() {
     }
   } catch (erro) {
     console.error("Falha ao iniciar dark mode:", erro);
+  }
+
+  /*
+   * Preview do editor: avisa e redireciona o botão de acesso
+   * para a URL real de implantação.
+   */
+  try {
+    if (emPreviewEditor()) {
+      mostrarAvisoPreview();
+
+      var botaoAcesso = document.getElementById("btn-status-acesso");
+      var textoAcesso = document.getElementById("texto-status-acesso");
+
+      if (botaoAcesso && textoAcesso) {
+        textoAcesso.textContent = "Abrir URL real";
+        botaoAcesso.style.background = "#fee2e2";
+        botaoAcesso.style.borderColor = "#dc2626";
+        botaoAcesso.style.color = "#991b1b";
+        botaoAcesso.onclick = abrirUrlReal;
+      }
+    }
+  } catch (erro) {
+    console.error("Falha ao configurar aviso de preview:", erro);
   }
 
   /*
@@ -384,11 +464,24 @@ function formatarPerfil(perfil) {
 
 function fazerLogin() {
   /*
+   * No preview do editor o reload quebra (página branca) e o
+   * login é impossível — avisa e aponta para a URL real.
+   */
+  if (emPreviewEditor()) {
+    mostrarAvisoPreview();
+    mostrarToast(
+      "O login só funciona na URL real de implantação — abra o link do aviso.",
+      "warning"
+    );
+    return;
+  }
+
+  /*
    * Recarrega a PRÓPRIA janela (window.location, não window.top):
-   * o app pode estar em um iframe (preview do editor, Google Sites)
-   * onde acessar window.top é bloqueado por política de origem.
-   * Com a implantação "Qualquer pessoa com conta Google", o próprio
-   * Google pede a conta ao carregar o app.
+   * o app pode estar em um iframe onde acessar window.top é
+   * bloqueado por política de origem. Com a implantação "Qualquer
+   * pessoa com conta Google", o próprio Google pede a conta ao
+   * carregar o app.
    */
   window.location.reload();
 }
