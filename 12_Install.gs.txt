@@ -193,28 +193,88 @@ function criarAbaTelefones(spreadsheet) {
 function criarAbaUsuarios(
   spreadsheet
 ) {
-  return garantirAbaComCabecalho(
+  const sheet =
+    garantirAbaComCabecalho(
+      spreadsheet,
+      CONFIG.SHEETS.USUARIOS,
+      [
+        "EMAIL",
+        "NOME",
+        "PERFIL",
+        "ATIVO",
+        "COMARCAS"
+      ]
+    );
+
+  garantirColunaComarcasUsuarios(
     spreadsheet,
-    CONFIG.SHEETS.USUARIOS,
-    [
-      "EMAIL",
-      "NOME",
-      "PERFIL",
-      "ATIVO"
-    ]
+    sheet
   );
+
+  return sheet;
 }
 
 /**
- * Cria a aba SOLICITACOES_ACESSO.
+ * Migração: garante a coluna COMARCAS na aba USUARIOS
+ * de instalações antigas (limitadores de comarca para
+ * gestores de conteúdo).
+ */
+function garantirColunaComarcasUsuarios(
+  spreadsheet,
+  sheet
+) {
+  const headers = DB.headers(sheet);
+
+  const temComarcas =
+    headers.some(header =>
+      normalizarChave(header) === "COMARCAS"
+    );
+
+  if (temComarcas) {
+    return sheet;
+  }
+
+  const ultimaColuna = sheet.getLastColumn();
+
+  sheet.insertColumns(
+    Math.max(ultimaColuna, 1) + 1,
+    1
+  );
+
+  sheet
+    .getRange(1, Math.max(ultimaColuna, 1) + 1)
+    .setValue("COMARCAS");
+
+  return sheet;
+}
+
+/**
+ * Cria a aba de solicitações de acesso.
+ *
+ * Usa o nome canônico ("Solicitações de Acesso do sistema");
+ * se a aba legada "SOLICITACOES_ACESSO" existir, ela é
+ * reaproveitada em vez de criar uma duplicata.
  */
 function criarAbaSolicitacoesAcesso(
   spreadsheet
 ) {
-  const sheet =
-    garantirAbaComCabecalho(
-      spreadsheet,
-      CONFIG.SHEETS.SOLICITACOES_ACESSO,
+  const nomeCanonico =
+    CONFIG.SHEETS.SOLICITACOES_ACESSO;
+
+  const nomeLegado =
+    CONFIG.SHEETS.SOLICITACOES_ACESSO_LEGADO;
+
+  let sheet =
+    spreadsheet.getSheetByName(nomeCanonico) ||
+    spreadsheet.getSheetByName(nomeLegado);
+
+  if (!sheet) {
+    sheet =
+      spreadsheet.insertSheet(nomeCanonico);
+  }
+
+  if (sheet.getLastRow() === 0) {
+    sheet.appendRow(
       [
         "ID",
         "EMAIL",
@@ -228,6 +288,7 @@ function criarAbaSolicitacoesAcesso(
         "DATA_APROVACAO"
       ]
     );
+  }
 
   garantirColunaComarca(
     spreadsheet,

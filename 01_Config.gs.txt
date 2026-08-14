@@ -8,12 +8,19 @@
 const CONFIG = {
   SISTEMA: {
     NOME: "Sistema Inteligente de Gestão de Telefones do Poder Judiciário do Estado do Espírito Santo",
-    VERSAO: "2.0"
+    VERSAO: "2.1"
   },
 
   WEB_APP: {
+    /**
+     * URL ÚNICA do sistema (versão única).
+     *
+     * O acesso administrativo é definido pela conta Google ativa:
+     * quem possui perfil GESTOR_SISTEMA ou GESTOR_CONTEUDO ativo na
+     * aba USUARIOS entra automaticamente; os demais usam o sistema
+     * como visitante e podem solicitar acesso pelo formulário.
+     */
     URL_PUBLICA: "https://script.google.com/macros/s/AKfycbzaathk7D0CWdI_Vx_a1eIcgJwXnFqGK5wh7goK3GxUkE5CwSSvPIsbYb5sk5vikMZH/exec",
-    URL_ADMIN: "https://script.google.com/a/macros/tjes.jus.br/s/AKfycbwCx5f9QxkW-74HoJzVF-zVsa57QzTInB0uCTWhyIM84WZ8xfvHVF0WxHRXFtD7L6Y4/exec",
 
     /**
      * Deixe false para evitar que o sistema seja colocado
@@ -36,7 +43,8 @@ const CONFIG = {
     CONFIGURACAO: "CONFIGURACAO",
     HISTORICO: "HISTORICO",
     LOG: "LOG",
-    SOLICITACOES_ACESSO: "SOLICITACOES_ACESSO",
+    SOLICITACOES_ACESSO: "Solicitações de Acesso do sistema",
+    SOLICITACOES_ACESSO_LEGADO: "SOLICITACOES_ACESSO",
     EMAILS_PENDENTES: "EMAILS_PENDENTES"
   },
 

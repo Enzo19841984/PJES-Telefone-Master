@@ -11,6 +11,9 @@ Arquivo: index.html
     <base target="_top">
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
 
     <title><?= sistemaNome ?></title>
 
@@ -21,14 +24,16 @@ Arquivo: index.html
     <script>
       var MOSTRAR_MODAL_ACESSO = <?= mostrarModalAcesso ? true : false ?>;
       var URL_SISTEMA = <?!= JSON.stringify(urlSistema || "") ?>;
-      var URL_ADMIN = <?!= JSON.stringify(urlAdmin || "") ?>;
       var SISTEMA_NOME = <?!= JSON.stringify(sistemaNome || "") ?>;
       var SISTEMA_VERSAO = <?!= JSON.stringify(sistemaVersao || "") ?>;
-      
+      var PERFIL_ADMIN = <?!= JSON.stringify(perfilAdmin || "") ?>;
+      var SESSAO_EMAIL = <?!= JSON.stringify(sessaoEmail || "") ?>;
+
       window.URL_SISTEMA = URL_SISTEMA;
-      window.URL_ADMIN = URL_ADMIN;
       window.SISTEMA_NOME = SISTEMA_NOME;
       window.SISTEMA_VERSAO = SISTEMA_VERSAO;
+      window.PERFIL_ADMIN = PERFIL_ADMIN;
+      window.SESSAO_EMAIL = SESSAO_EMAIL;
     </script>
 
     <div id="app"><?!= include("Layout"); ?></div>
@@ -93,6 +98,7 @@ Arquivo: index.html
     <?!= include("SearchJS"); ?>
     <?!= include("DashboardJS"); ?>
     <?!= include("SolicitacoesJS"); ?>
+    <?!= include("UsuariosJS"); ?>
     <?!= include("AppJS"); ?>
   </body>
   

@@ -52,6 +52,60 @@ function normalizarEmail(email) {
 }
 
 /**
+ * Converte um valor em lista de comarcas permitidas.
+ *
+ * Aceita "TODAS" (ou vazio) = sem restrição;
+ * separadores: vírgula, ponto e vírgula, barra ou nova linha.
+ */
+function parseComarcas(valor) {
+  const texto = textoSeguro(valor);
+
+  if (!texto) {
+    return [];
+  }
+
+  if (/^todas?$/i.test(texto)) {
+    return [];
+  }
+
+  const lista =
+    texto
+      .split(/[,;\n|]+/)
+      .map(item => textoSeguro(item))
+      .filter(Boolean);
+
+  const unicas = [];
+  const vistos = {};
+
+  lista.forEach(item => {
+    const chave = normalizarChave(item);
+
+    if (!vistos[chave]) {
+      vistos[chave] = true;
+      unicas.push(item);
+    }
+  });
+
+  return unicas;
+}
+
+/**
+ * Serializa uma lista de comarcas para a planilha.
+ */
+function serializarComarcas(lista) {
+  const valores = Array.isArray(lista) ? lista : [];
+
+  if (valores.length === 0) {
+    return "";
+  }
+
+  return valores
+    .map(item => textoSeguro(item))
+    .filter(Boolean)
+    .join(", ");
+}
+
+/**
  * Verifica se o e-mail pertence ao domínio institucional.
  */
 function emailInstitucional(email) {

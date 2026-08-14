@@ -77,6 +77,34 @@ function listarTelefones() {
     const dados =
       new TelefoneRepository().listar();
 
+    /*
+     * Gestor de conteúdo limitado a comarcas específicas
+     * enxerga (e só consegue atuar) nas suas comarcas.
+     */
+    const usuario =
+      new AuthService().usuarioAtual();
+
+    if (
+      usuario.logado &&
+      usuario.perfil === CONFIG.PERFIS.GESTOR_CONTEUDO &&
+      (usuario.comarcas || []).length > 0
+    ) {
+      const permitidas =
+        usuario.comarcas.map(item =>
+          normalizarChave(item)
+        );
+
+      return respostaSucesso(
+        dados.filter(item =>
+          permitidas.includes(
+            normalizarChave(
+              textoSeguro(item.comarca)
+            )
+          )
+        )
+      );
+    }
+
     return respostaSucesso(dados);
   } catch (erro) {
     registrarErroAPI(
@@ -211,6 +239,10 @@ function criarTelefone(dados) {
       );
     }
 
+    new AuthService().exigirPermissaoComarca(
+      valorObjeto(dados, "comarca", "COMARCA")
+    );
+
     return respostaSucesso(
       new TelefoneRepository().inserir(dados)
     );
@@ -244,6 +276,29 @@ function atualizarTelefone(id, dados) {
       );
     }
 
+    /*
+     * O gestor de conteúdo limitado só pode alterar telefones
+     * das suas comarcas — nem a comarca atual nem a nova podem
+     * estar fora do escopo dele.
+     */
+    const atual =
+      new TelefoneRepository().obter(idBusca);
+
+    if (atual) {
+      new AuthService().exigirPermissaoComarca(
+        textoSeguro(atual.comarca)
+      );
+    }
+
+    const novaComarca =
+      textoSeguro(
+        valorObjeto(dados, "comarca", "COMARCA")
+      );
+
+    if (novaComarca) {
+      new AuthService().exigirPermissaoComarca(novaComarca);
+    }
+
     return respostaSucesso(
       new TelefoneRepository().atualizar(
         idBusca,
@@ -271,6 +326,15 @@ function excluirTelefone(id) {
     if (!idBusca) {
       throw new Error(
         "ID do telefone é obrigatório."
+      );
+    }
+
+    const registro =
+      new TelefoneRepository().obter(idBusca);
+
+    if (registro) {
+      new AuthService().exigirPermissaoComarca(
+        textoSeguro(registro.comarca)
       );
     }
 
@@ -424,13 +488,11 @@ function listarSolicitacoes() {
     );
 
     const sheet =
-      obterPlanilhaAPI().getSheetByName(
-        CONFIG.SHEETS.SOLICITACOES_ACESSO
-      );
+      DB.solicitacoesAcesso();
 
     if (!sheet) {
       throw new Error(
-        "Aba SOLICITACOES_ACESSO não encontrada."
+        "Aba de solicitações de acesso não encontrada."
       );
     }
 
@@ -574,13 +636,11 @@ function solicitarAcesso(nome, perfil, justificativa, comarca) {
       textoSeguro(comarca);
 
     const sheet =
-      obterPlanilhaAPI().getSheetByName(
-        CONFIG.SHEETS.SOLICITACOES_ACESSO
-      );
+      DB.solicitacoesAcesso();
 
     if (!sheet) {
       throw new Error(
-        "Aba SOLICITACOES_ACESSO não encontrada."
+        "Aba de solicitações de acesso não encontrada."
       );
     }
 
@@ -775,13 +835,11 @@ function enviarFormularioAcesso(dados) {
     }
 
     const sheet =
-      obterPlanilhaAPI().getSheetByName(
-        CONFIG.SHEETS.SOLICITACOES_ACESSO
-      );
+      DB.solicitacoesAcesso();
 
     if (!sheet) {
       throw new Error(
-        "Aba SOLICITACOES_ACESSO não encontrada."
+        "Aba de solicitações de acesso não encontrada."
       );
     }
 
@@ -942,13 +1000,11 @@ function processarSolicitacaoAPI(id, novoStatus) {
     const ss = obterPlanilhaAPI();
 
     const sheetSolic =
-      ss.getSheetByName(
-        CONFIG.SHEETS.SOLICITACOES_ACESSO
-      );
+      DB.solicitacoesAcesso();
 
     if (!sheetSolic) {
       throw new Error(
-        "Aba SOLICITACOES_ACESSO não encontrada."
+        "Aba de solicitações de acesso não encontrada."
       );
     }
 
@@ -1719,8 +1775,8 @@ function notificarNovaSolicitacao(
   }
 
   corpo +=
-    "\nAcesse a área administrativa:\n" +
-    obterUrlAdmin();
+    "\nAcesse o sistema:\n" +
+    obterUrlSistema();
 
   adicionarEmailPendente(
     gestorEmail,
@@ -1766,7 +1822,7 @@ function notificarDecisaoSolicitacao(
   if (aprovado) {
     corpo +=
       "Acesse o sistema pelo endereço:\n" +
-      obterUrlAdmin();
+      obterUrlSistema();
   } else {
     corpo +=
       "Você poderá tentar novamente mais tarde.";
@@ -2082,5 +2138,242 @@ function obterConfiguracaoAPI(chave) {
     );
 
     return null;
+  }
+}
+
+/**
+ * ==========================================================
+ * GESTÃO DE USUÁRIOS (somente GESTOR_SISTEMA)
+ * ==========================================================
+ */
+
+function listarUsuarios() {
+  try {
+    new AuthService().exigirPerfil(
+      CONFIG.PERFIS.GESTOR_SISTEMA
+    );
+
+    const sheet = DB.usuarios();
+    const mapa = DB.map(sheet);
+    const dados = DB.read(sheet);
+
+    const idxNome = mapa.NOME;
+    const idxPerfil = mapa.PERFIL;
+    const idxAtivo = mapa.ATIVO;
+    const idxComarcas = mapa.COMARCAS;
+
+    const resultado =
+      dados.map(linha => ({
+        email: textoSeguro(linha[0]),
+        nome: textoSeguro(idxNome ? linha[idxNome - 1] : ""),
+        perfil: String(idxPerfil ? linha[idxPerfil - 1] : "").trim().toUpperCase(),
+        ativo: paraBoolean(idxAtivo ? linha[idxAtivo - 1] : false),
+        comarcas: idxComarcas !== undefined ? textoSeguro(linha[idxComarcas - 1]) : ""
+      }));
+
+    return respostaSucesso(resultado);
+  } catch (erro) {
+    registrarErroAPI(
+      "LISTAR_USUARIOS",
+      erro
+    );
+
+    return respostaErro(erro);
+  }
+}
+
+/**
+ * Atualiza um usuário da aba USUARIOS.
+ *
+ * Permite trocar o perfil (GESTOR_SISTEMA, GESTOR_CONTEUDO ou
+ * USUARIO_CONSULTA/visitante), ativar/desativar e definir as
+ * comarcas permitidas para gestores de conteúdo.
+ *
+ * Proteções:
+ * - Somente GESTOR_SISTEMA;
+ * - não é possível editar a própria conta (evita trava acidental);
+ * - não é possível remover o último gestor do sistema ativo.
+ */
+function atualizarUsuario(email, dados) {
+  const lock = LockService.getScriptLock();
+  let bloqueado = false;
+
+  try {
+    lock.waitLock(30000);
+    bloqueado = true;
+
+    const auth = new AuthService();
+
+    auth.exigirPerfil(
+      CONFIG.PERFIS.GESTOR_SISTEMA
+    );
+
+    const emailAlvo = normalizarEmail(email);
+
+    if (!emailAlvo) {
+      throw new Error("E-mail do usuário é obrigatório.");
+    }
+
+    const sessao = auth.usuarioAtual();
+
+    if (normalizarEmail(sessao.email) === emailAlvo) {
+      throw new Error("Você não pode editar a sua própria conta pelo painel de usuários.");
+    }
+
+    const entrada = ehObjeto(dados) ? dados : {};
+
+    const perfilNovo =
+      String(
+        valorObjeto(entrada, "perfil", "PERFIL")
+          || CONFIG.PERFIS.USUARIO_CONSULTA
+      )
+        .trim()
+        .toUpperCase();
+
+    const perfisValidos = [
+      CONFIG.PERFIS.GESTOR_SISTEMA,
+      CONFIG.PERFIS.GESTOR_CONTEUDO,
+      CONFIG.PERFIS.USUARIO_CONSULTA
+    ];
+
+    if (!perfisValidos.includes(perfilNovo)) {
+      throw new Error("Perfil inválido.");
+    }
+
+    const ativoNovo =
+      paraBoolean(
+        valorObjeto(entrada, "ativo", "ATIVO")
+      );
+
+    const nomeNovo =
+      textoSeguro(
+        valorObjeto(entrada, "nome", "NOME")
+      );
+
+    const comarcasNovo =
+      parseComarcas(
+        valorObjeto(entrada, "comarcas", "COMARCAS")
+      );
+
+    if (
+      perfilNovo === CONFIG.PERFIS.GESTOR_CONTEUDO &&
+      comarcasNovo.length > 0
+    ) {
+      // valida apenas que o texto não contém separadores inválidos
+      if (comarcasNovo.some(item => item.length > 150)) {
+        throw new Error("Nome de comarca muito longo.");
+      }
+    }
+
+    const sheet = DB.usuarios();
+    const mapa = DB.map(sheet);
+    const dadosSheet = sheet.getDataRange().getValues();
+
+    const idxEmail = mapa.EMAIL;
+    const idxNome = mapa.NOME;
+    const idxPerfil = mapa.PERFIL;
+    const idxAtivo = mapa.ATIVO;
+    const idxComarcas = mapa.COMARCAS;
+
+    let linhaEncontrada = -1;
+
+    for (let i = 1; i < dadosSheet.length; i++) {
+      if (normalizarEmail(dadosSheet[i][idxEmail - 1]) === emailAlvo) {
+        linhaEncontrada = i + 1;
+        break;
+      }
+    }
+
+    if (linhaEncontrada === -1) {
+      throw new Error("Usuário não encontrado na aba USUARIOS.");
+    }
+
+    const perfilAtual =
+      String(dadosSheet[linhaEncontrada - 1][idxPerfil - 1] || "")
+        .trim()
+        .toUpperCase();
+
+    const ativoAtual =
+      paraBoolean(dadosSheet[linhaEncontrada - 1][idxAtivo - 1]);
+
+    /*
+     * Proteção: não permitir desativar/demover o último
+     * gestor do sistema ativo.
+     */
+    if (
+      perfilAtual === CONFIG.PERFIS.GESTOR_SISTEMA &&
+      ativoAtual &&
+      (perfilNovo !== CONFIG.PERFIS.GESTOR_SISTEMA || !ativoNovo)
+    ) {
+      let outrosGestores = 0;
+
+      for (let i = 1; i < dadosSheet.length; i++) {
+        if (i === linhaEncontrada - 1) continue;
+
+        const perfil =
+          String(dadosSheet[i][idxPerfil - 1] || "")
+            .trim()
+            .toUpperCase();
+
+        const ativo =
+          paraBoolean(dadosSheet[i][idxAtivo - 1]);
+
+        if (
+          perfil === CONFIG.PERFIS.GESTOR_SISTEMA &&
+          ativo
+        ) {
+          outrosGestores++;
+        }
+      }
+
+      if (outrosGestores === 0) {
+        throw new Error(
+          "Não é possível remover o último gestor do sistema ativo."
+        );
+      }
+    }
+
+    if (idxNome !== undefined) {
+      sheet.getRange(linhaEncontrada, idxNome).setValue(nomeNovo);
+    }
+
+    if (idxPerfil !== undefined) {
+      sheet.getRange(linhaEncontrada, idxPerfil).setValue(perfilNovo);
+    }
+
+    if (idxAtivo !== undefined) {
+      sheet.getRange(linhaEncontrada, idxAtivo).setValue(ativoNovo ? "SIM" : "NÃO");
+    }
+
+    if (idxComarcas !== undefined) {
+      sheet.getRange(linhaEncontrada, idxComarcas).setValue(
+        serializarComarcas(comarcasNovo)
+      );
+    }
+
+    SpreadsheetApp.flush();
+
+    registrarInfoAPI(
+      "ATUALIZAR_USUARIO",
+      emailAlvo + " -> " + perfilNovo + (ativoNovo ? " (ativo)" : " (inativo)")
+    );
+
+    return respostaSucesso({
+      email: emailAlvo,
+      perfil: perfilNovo,
+      ativo: ativoNovo,
+      comarcas: serializarComarcas(comarcasNovo)
+    });
+  } catch (erro) {
+    registrarErroAPI(
+      "ATUALIZAR_USUARIO",
+      erro
+    );
+
+    return respostaErro(erro);
+  } finally {
+    if (bloqueado) {
+      lock.releaseLock();
+    }
   }
 }

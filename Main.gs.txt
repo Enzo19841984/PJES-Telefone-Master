@@ -6,21 +6,28 @@
  */
 
 function doGet(e) {
-  const parametros = e && e.parameter ? e.parameter : {};
-  const origem = String(parametros.origem || "").trim().toLowerCase();
+  /*
+   * Versão única: não existe mais URL pública × URL privada.
+   * O acesso administrativo é definido pela conta Google ativa:
+   * se ela possui perfil GESTOR_SISTEMA ou GESTOR_CONTEUDO ativo
+   * na aba USUARIOS, o usuário entra automaticamente no cargo.
+   */
+  const email = AuthService.obterEmailAtivo();
 
-  Logger.log(JSON.stringify({ origemRecebida: origem, parametros: parametros }));
+  const usuario =
+    email && emailInstitucional(email)
+      ? obterUsuarioAdmin(email)
+      : null;
 
-  if (origem === "admin") {
-    return carregarAplicacaoAdministrativa();
+  if (usuario) {
+    return carregarAplicacaoAdministrativa(usuario);
   }
 
-  return carregarAplicacaoPublica();
+  return carregarAplicacaoPublica(email || "");
 }
 
 function prepararTemplateAplicacao(template) {
   template.urlSistema = CONFIG.WEB_APP.URL_PUBLICA;
-  template.urlAdmin = obterUrlAdmin();
   template.sistemaNome = CONFIG.SISTEMA.NOME;
   template.sistemaVersao = CONFIG.SISTEMA.VERSAO;
   return template;
@@ -43,42 +50,90 @@ function finalizarHtml(html, titulo) {
   return output;
 }
 
-function carregarAplicacaoPublica() {
+function carregarAplicacaoPublica(email) {
   const template = prepararTemplateAplicacao(
     HtmlService.createTemplateFromFile("index")
   );
+
+  template.perfilAdmin = "";
+  template.sessaoEmail = textoSeguro(email);
   template.mostrarModalAcesso = false;
+
   return finalizarTemplate(template, CONFIG.SISTEMA.NOME);
 }
 
-function carregarAplicacaoAdministrativa() {
-  const email = AuthService.obterEmailAtivo();
-
-  if (!email) {
-    return renderizarPaginaErro("ErroEmailInvalido", "E-mail inválido");
-  }
-
-  if (!emailInstitucional(email)) {
-    return renderizarPaginaErro("ErroAcessoRestrito", "Acesso restrito");
-  }
-
-  const resultado = obterOuCadastrarUsuario(email);
-
-  if (!resultado || resultado.erro) {
-    const mensagem = resultado && resultado.mensagem ? resultado.mensagem : "Erro ao consultar a aba USUARIOS.";
-    return finalizarHtml("<h2>" + escaparHtmlServidor(mensagem) + "</h2>", "Erro");
-  }
-
-  AuthService.salvarSessao(email, resultado.perfil || CONFIG.PERFIS.USUARIO_CONSULTA);
+function carregarAplicacaoAdministrativa(usuario) {
+  AuthService.salvarSessao(usuario.email, usuario.perfil);
 
   const template = prepararTemplateAplicacao(
     HtmlService.createTemplateFromFile("index")
   );
 
-  // Só mostra o modal de solicitação se o perfil for USUARIO_CONSULTA
-  template.mostrarModalAcesso = (resultado.perfil === CONFIG.PERFIS.USUARIO_CONSULTA);
+  template.perfilAdmin = usuario.perfil;
+  template.sessaoEmail = usuario.email;
+  template.mostrarModalAcesso = false;
 
   return finalizarTemplate(template, CONFIG.SISTEMA.NOME);
+}
+
+/**
+ * Localiza o usuário na aba USUARIOS para acesso administrativo.
+ *
+ * Retorna o usuário somente se ele existir, estiver ATIVO e possuir
+ * um perfil administrativo (GESTOR_SISTEMA ou GESTOR_CONTEUDO).
+ * Caso contrário, retorna null (acesso negado).
+ */
+function obterUsuarioAdmin(email) {
+  const emailNormalizado = normalizarEmail(email);
+
+  if (!emailNormalizado) {
+    return null;
+  }
+
+  try {
+    const sheet = DB.usuarios();
+    const mapa = DB.map(sheet);
+    const idxEmail = mapa.EMAIL;
+    const idxNome = mapa.NOME;
+    const idxPerfil = mapa.PERFIL;
+    const idxAtivo = mapa.ATIVO;
+
+    if (!idxEmail || !idxPerfil || !idxAtivo) {
+      return null;
+    }
+
+    const dados = DB.read(sheet);
+
+    for (const linha of dados) {
+      if (normalizarEmail(linha[idxEmail - 1]) !== emailNormalizado) {
+        continue;
+      }
+
+      const nome = textoSeguro(idxNome ? linha[idxNome - 1] : "");
+      const perfil = String(linha[idxPerfil - 1] || "").trim().toUpperCase();
+      const ativo = paraBoolean(linha[idxAtivo - 1]);
+
+      const ehAdministrativo =
+        perfil === CONFIG.PERFIS.GESTOR_SISTEMA ||
+        perfil === CONFIG.PERFIS.GESTOR_CONTEUDO;
+
+      if (!ativo || !ehAdministrativo) {
+        return null;
+      }
+
+      return {
+        email: emailNormalizado,
+        nome: nome || emailNormalizado.split("@")[0],
+        perfil: perfil,
+        ativo: true
+      };
+    }
+
+    return null;
+  } catch (erro) {
+    console.error("Falha ao consultar USUARIOS:", erro);
+    return null;
+  }
 }
 
 function escaparHtmlServidor(valor) {
@@ -90,21 +145,17 @@ function escaparHtmlServidor(valor) {
     .replace(/'/g, "&#039;");
 }
 
-function obterUrlAdmin() {
-  const base = String(CONFIG.WEB_APP && CONFIG.WEB_APP.URL_ADMIN ? CONFIG.WEB_APP.URL_ADMIN : "").trim();
-  if (!base) throw new Error("URL_ADMIN não foi configurada no CONFIG.");
-  if (base.includes("ID_ADMINISTRATIVO") || base.includes("ID_PUBLICO")) {
-    throw new Error("Substitua os IDs fictícios pelas URLs reais das implantações.");
+function obterUrlSistema() {
+  const base = String(CONFIG.WEB_APP && CONFIG.WEB_APP.URL_PUBLICA ? CONFIG.WEB_APP.URL_PUBLICA : "").trim();
+  if (!base) throw new Error("URL_PUBLICA não foi configurada no CONFIG.");
+  if (base.includes("ID_PUBLICO")) {
+    throw new Error("Substitua o ID fictício pela URL real da implantação.");
   }
-  if (/[?&]origem=/i.test(base)) {
-    return base.replace(/([?&])origem=[^&]*/i, "$1origem=admin");
-  }
-  const separador = base.includes("?") ? "&" : "?";
-  return base + separador + "origem=admin";
+  return base;
 }
 
 function obterUrlAlternarConta() {
-  return "https://accounts.google.com/logout?continue=" + encodeURIComponent(obterUrlAdmin());
+  return "https://accounts.google.com/logout?continue=" + encodeURIComponent(obterUrlSistema());
 }
 
 function renderizarPaginaErro(nomeArquivo, titulo) {
@@ -123,96 +174,6 @@ function include(nomeArquivo) {
   template.sistemaNome = CONFIG.SISTEMA.NOME;
   template.sistemaVersao = CONFIG.SISTEMA.VERSAO;
   template.urlSistema = CONFIG.WEB_APP.URL_PUBLICA;
-  template.urlAdmin = obterUrlAdmin();
   template.mostrarModalAcesso = false;
   return template.evaluate().getContent();
-}
-
-/**
- * Localiza o usuário na aba USUARIOS.
- * Se for um e‑mail institucional ainda não cadastrado,
- * cadastra automaticamente com perfil USUARIO_CONSULTA e ATIVO = SIM.
- */
-function obterOuCadastrarUsuario(email) {
-  const perfilConsulta = CONFIG.PERFIS.USUARIO_CONSULTA;
-  const emailNormalizado = normalizarEmail(email);
-
-  if (!emailNormalizado) {
-    return { erro: "EMAIL_INVALIDO", perfil: perfilConsulta };
-  }
-
-  try {
-    const sheet = DB.usuarios();
-    const mapa = DB.map(sheet);
-    const idxEmail = mapa.EMAIL;
-    if (!idxEmail) {
-      return { erro: "PLANILHA", mensagem: "Aba USUARIOS não possui a coluna EMAIL.", perfil: perfilConsulta };
-    }
-
-    const dados = DB.read(sheet);
-    const perfisValidos = [CONFIG.PERFIS.GESTOR_SISTEMA, CONFIG.PERFIS.GESTOR_CONTEUDO, CONFIG.PERFIS.USUARIO_CONSULTA];
-
-    for (const linha of dados) {
-      const emailLinha = normalizarEmail(linha[idxEmail - 1]);
-      if (emailLinha !== emailNormalizado) continue;
-
-      const idxNome = mapa.NOME;
-      const idxPerfil = mapa.PERFIL;
-      const idxAtivo = mapa.ATIVO;
-      const nome = textoSeguro(idxNome ? linha[idxNome - 1] : "");
-      const perfilInformado = String(idxPerfil ? linha[idxPerfil - 1] : perfilConsulta).trim().toUpperCase();
-      const perfilSeguro = perfisValidos.includes(perfilInformado) ? perfilInformado : perfilConsulta;
-      const ativo = paraBoolean(idxAtivo ? linha[idxAtivo - 1] : false);
-
-      return {
-        email: emailNormalizado,
-        nome: nome || emailNormalizado.split("@")[0],
-        perfil: ativo ? perfilSeguro : perfilConsulta,
-        ativo: ativo
-      };
-    }
-
-    // Usuário NÃO encontrado → cadastra automaticamente
-    const lock = LockService.getScriptLock();
-    lock.waitLock(10000);
-    try {
-      // Releitura para evitar duplicação em caso de concorrência
-      const dadosAtuais = DB.read(sheet);
-      for (const linha of dadosAtuais) {
-        if (normalizarEmail(linha[idxEmail - 1]) === emailNormalizado) {
-          return {
-            email: emailNormalizado,
-            nome: emailNormalizado.split("@")[0],
-            perfil: perfilConsulta,
-            ativo: true
-          };
-        }
-      }
-
-      const idxNome = mapa.NOME || 2;
-      const idxPerfil = mapa.PERFIL || 3;
-      const idxAtivo = mapa.ATIVO || 4;
-      const cabecalhos = DB.headers(sheet);
-      const novaLinha = [];
-      for (let c = 0; c < cabecalhos.length; c++) novaLinha.push("");
-      novaLinha[idxEmail - 1] = emailNormalizado;
-      if (idxNome) novaLinha[idxNome - 1] = emailNormalizado.split("@")[0];
-      if (idxPerfil) novaLinha[idxPerfil - 1] = perfilConsulta;
-      if (idxAtivo) novaLinha[idxAtivo - 1] = "SIM";
-
-      sheet.appendRow(novaLinha);
-      SpreadsheetApp.flush();
-    } finally {
-      lock.releaseLock();
-    }
-
-    return {
-      email: emailNormalizado,
-      nome: emailNormalizado.split("@")[0],
-      perfil: perfilConsulta,
-      ativo: true
-    };
-  } catch (erro) {
-    return { erro: "PLANILHA", mensagem: erro.message || String(erro), perfil: perfilConsulta };
-  }
 }

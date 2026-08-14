@@ -33,6 +33,11 @@ Arquivo: Sidebar.html
         <span>Solicitações de Acesso</span>
       </button>
 
+      <button type="button" id="menu-usuarios" class="menu-item hidden" onclick="mostrarView('usuarios-view')">
+        <span class="icon">🧑‍💼</span>
+        <span>Usuários</span>
+      </button>
+
       <button type="button" id="menu-alteracoes" class="menu-item" onclick="mostrarView('registro-alteracoes-view')">
         <span class="icon">📋</span>
         <span>Registro de Alterações</span>
@@ -72,5 +77,24 @@ Arquivo: Sidebar.html
     <div id="sidebar-user" style=" margin-top: 10px; font-size: 11px; color: #94a3b8; text-align: center;">
       Perfil: Usuário de Consulta
     </div>
+
+    <div id="sidebar-version" style="margin-top: 4px; font-size: 10px; color: #cbd5e1; text-align: center;">
+      v<span id="sidebar-version-num">2.1</span>
+    </div>
   </div>
 </div>
+
+<script>
+function atualizarVersaoSidebar() {
+  var elemento = document.getElementById("sidebar-version-num");
+  if (!elemento) return;
+
+  var versao =
+    (typeof window.SISTEMA_VERSAO !== "undefined" && window.SISTEMA_VERSAO) ||
+    "2.1";
+
+  elemento.textContent = String(versao);
+}
+
+document.addEventListener("DOMContentLoaded", atualizarVersaoSidebar);
+</script>

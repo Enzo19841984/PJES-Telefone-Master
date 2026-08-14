@@ -40,12 +40,93 @@ function mensagemErroFrontend(erro, fallback) {
  * o dashboard e a consulta.
  */
 function iniciarSistema() {
-  usuarioAtual = usuarioVisitante();
+  /*
+   * A sessão administrativa chega pronta do servidor:
+   * com a versão única, o doGet já identificou a conta Google
+   * e injetou PERFIL_ADMIN quando ela possui cargo ativo.
+   */
+  var perfilInjetado = String(
+    (typeof window.PERFIL_ADMIN !== "undefined" && window.PERFIL_ADMIN) || ""
+  ).trim();
+
+  var emailInjetado = String(
+    (typeof window.SESSAO_EMAIL !== "undefined" && window.SESSAO_EMAIL) || ""
+  ).trim();
+
+  if (perfilInjetado && emailInjetado) {
+    usuarioAtual = {
+      nome: emailInjetado.split("@")[0],
+      email: emailInjetado,
+      perfil: perfilInjetado,
+      logado: true,
+      ativo: true
+    };
+  } else {
+    usuarioAtual = usuarioVisitante();
+  }
 
   atualizarInterfaceUsuario();
   carregarTelefones();
   iniciarDarkMode();
+
+  /*
+   * Atualiza os dados completos da sessão (nome, comarcas
+   * permitidas etc.) de forma assíncrona.
+   */
+  if (typeof API !== "undefined" && typeof API.usuarioAtual === "function") {
+    API.usuarioAtual(
+      function(resposta) {
+        if (!resposta || resposta.sucesso !== true || !resposta.dados) {
+          return;
+        }
+
+        var dados = resposta.dados || {};
+
+        if (dados.logado === true && dados.email) {
+          usuarioAtual = {
+            nome: dados.nome || dados.email.split("@")[0],
+            email: dados.email,
+            perfil: dados.perfil || "USUARIO_CONSULTA",
+            logado: true,
+            ativo: dados.ativo === true,
+            comarcas: Array.isArray(dados.comarcas) ? dados.comarcas : []
+          };
+
+          atualizarInterfaceUsuario();
+        }
+      },
+      function() {}
+    );
+  }
 }
+
+/**
+ * Re-sincroniza a interface quando a página volta do cache
+ * do navegador (botão voltar / bfcache).
+ *
+ * Corrige o problema em que, após entrar/sair do acesso
+ * administrativo, a tela voltava com o mapa sumido e partes
+ * da interface em estado antigo.
+ */
+window.addEventListener("pageshow", function(evento) {
+  if (evento.persisted) {
+    atualizarInterfaceUsuario();
+
+    if (
+      typeof mostrarMapaConsulta === "function" &&
+      document.getElementById("consulta-telefones-view") &&
+      !document
+        .getElementById("consulta-telefones-view")
+        .classList.contains("hidden") &&
+      document.getElementById("consulta-detalhes-conteudo") &&
+      getComputedStyle(
+        document.getElementById("consulta-detalhes-conteudo")
+      ).display === "none"
+    ) {
+      mostrarMapaConsulta();
+    }
+  }
+});
 
 function atualizarInterfaceUsuario() {
   const usuario = usuarioAtual || {};
@@ -91,16 +172,36 @@ function atualizarInterfaceUsuario() {
     );
 
   if (btnAcesso && textoAcesso) {
-    if (!logado) {
+    if (logado && perfil !== "USUARIO_CONSULTA") {
       configurarBotaoAcesso(
         btnAcesso,
         textoAcesso,
         {
-          texto: "Acesso Administrativo",
+          texto: "SAIR",
+          fundo: "#fee2e2",
+          borda: "#dc2626",
+          cor: "#991b1b",
+          acao: tratarCliqueAcesso
+        }
+      );
+    } else if (
+      String(
+        (typeof window.SESSAO_EMAIL !== "undefined" && window.SESSAO_EMAIL) || ""
+      ).trim() &&
+      !logado
+    ) {
+      /* Conta Google identificada, porém sem cargo administrativo. */
+      configurarBotaoAcesso(
+        btnAcesso,
+        textoAcesso,
+        {
+          texto: "Solicitar Acesso",
           fundo: "#fef3c7",
           borda: "#f59e0b",
           cor: "#92400e",
-          acao: fazerLogin
+          acao: function() {
+            mostrarView("formulario-acesso-view");
+          }
         }
       );
     } else if (
@@ -122,11 +223,11 @@ function atualizarInterfaceUsuario() {
         btnAcesso,
         textoAcesso,
         {
-          texto: "SAIR",
-          fundo: "#fee2e2",
-          borda: "#dc2626",
-          cor: "#991b1b",
-          acao: tratarCliqueAcesso
+          texto: "Acesso Administrativo",
+          fundo: "#fef3c7",
+          borda: "#f59e0b",
+          cor: "#92400e",
+          acao: fazerLogin
         }
       );
     }
@@ -155,6 +256,19 @@ function atualizarInterfaceUsuario() {
       "hidden",
       !logado ||
         perfil === "USUARIO_CONSULTA"
+    );
+  }
+
+  const menuUsuarios =
+    document.getElementById(
+      "menu-usuarios"
+    );
+
+  if (menuUsuarios) {
+    menuUsuarios.classList.toggle(
+      "hidden",
+      !logado ||
+        perfil !== "GESTOR_SISTEMA"
     );
   }
 
@@ -223,19 +337,22 @@ function formatarPerfil(perfil) {
 /**
  * ----------------------------------------------------------
  * LOGIN / ADMINISTRAÇÃO
- * Mantidos para não quebrar o restante da aplicação.
  * ----------------------------------------------------------
+ *
+ * Versão única: o login é feito pela própria conta Google.
+ * Quem possui cargo ativo (GESTOR_SISTEMA ou GESTOR_CONTEUDO)
+ * na aba USUARIOS entra automaticamente ao abrir o sistema.
  */
 
 function fazerLogin() {
   const destino =
     String(
-      window.URL_ADMIN || ""
+      window.URL_SISTEMA || ""
     ).trim();
 
   if (!destino) {
     mostrarToast(
-      "URL administrativa não configurada.",
+      "URL do sistema não configurada.",
       "error"
     );
     return;
@@ -245,7 +362,6 @@ function fazerLogin() {
     "https://accounts.google.com/AccountChooser" +
     "?continue=" +
     encodeURIComponent(destino) +
-    "&hd=tjes.jus.br" +
     "&flowName=GlifWebSignIn" +
     "&flowEntry=AccountChooser";
 
@@ -253,64 +369,36 @@ function fazerLogin() {
     urlLogin;
 }
 
+/**
+ * "SAIR" no modelo de versão única: como o acesso é definido
+ * pela conta Google ativa, sair significa trocar de conta.
+ * Redireciona para o logout do Google e volta ao sistema.
+ */
 function tratarCliqueAcesso() {
+  const destino =
+    String(
+      window.URL_SISTEMA || ""
+    ).trim();
+
+  if (!destino) {
+    mostrarToast(
+      "URL do sistema não configurada.",
+      "error"
+    );
+    return;
+  }
+
   if (
     !confirm(
-      "Deseja sair da sessão administrativa?"
+      "Deseja sair e trocar de conta Google?"
     )
   ) {
     return;
   }
 
-  if (
-    typeof API === "undefined" ||
-    typeof API.logout !== "function"
-  ) {
-    usuarioAtual =
-      usuarioVisitante();
-
-    atualizarInterfaceUsuario();
-    mostrarView("dashboard-view");
-
-    return;
-  }
-
-  API.logout(
-    function(resposta) {
-      if (
-        !resposta ||
-        resposta.sucesso !== true
-      ) {
-        mostrarToast(
-          resposta?.erro ||
-            "Não foi possível sair.",
-          "error"
-        );
-        return;
-      }
-
-      usuarioAtual =
-        usuarioVisitante();
-
-      atualizarInterfaceUsuario();
-      mostrarView("dashboard-view");
-
-      mostrarToast(
-        "Você saiu do acesso administrativo.",
-        "success"
-      );
-    },
-
-    function(erro) {
-      mostrarToast(
-        mensagemErroFrontend(
-          erro,
-          "Não foi possível encerrar a sessão."
-        ),
-        "error"
-      );
-    }
-  );
+  window.top.location.href =
+    "https://accounts.google.com/logout?continue=" +
+    encodeURIComponent(destino);
 }
 
 /**
@@ -383,6 +471,15 @@ function mostrarView(viewId) {
       "function"
   ) {
     carregarSolicitacoes();
+  }
+
+  if (
+    viewId ===
+      "usuarios-view" &&
+    typeof carregarUsuarios ===
+      "function"
+  ) {
+    carregarUsuarios();
   }
 }
 

@@ -84,6 +84,16 @@ const API = {
       .rejeitarSolicitacao(id);
   },
 
+  listarUsuarios(sucesso, erro) {
+    criarRunnerAPI(sucesso, erro)
+      .listarUsuarios();
+  },
+
+  atualizarUsuario(email, dados, sucesso, erro) {
+    criarRunnerAPI(sucesso, erro)
+      .atualizarUsuario(email, dados);
+  },
+
   logout(sucesso, erro) {
     criarRunnerAPI(sucesso, erro)
       .encerrarSessao();

@@ -5,7 +5,182 @@ Arquivo: FormularioAcesso.html
 ==========================================================
 -->
 
-<div class="formulario-acesso-container">
+<style>
+  .fa-wrap {
+    max-width: 760px;
+    margin: 0 auto;
+  }
+
+  .fa-card {
+    background: #ffffff;
+    border-radius: 16px;
+    border: 1px solid #e2e8f0;
+    box-shadow: 0 10px 25px -8px rgba(15, 23, 42, 0.12);
+    overflow: hidden;
+  }
+
+  .fa-head {
+    background: linear-gradient(135deg, #1e3a8a 0%, #2563eb 55%, #3b82f6 100%);
+    padding: 26px 30px;
+    color: #ffffff;
+    position: relative;
+  }
+
+  .fa-head::after {
+    content: "🔑";
+    position: absolute;
+    right: 24px;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 42px;
+    opacity: 0.25;
+  }
+
+  .fa-head h2 {
+    margin: 0 0 6px;
+    font-size: 20px;
+    font-weight: 800;
+    letter-spacing: 0.3px;
+  }
+
+  .fa-head p {
+    margin: 0;
+    font-size: 13px;
+    opacity: 0.9;
+    max-width: 480px;
+    line-height: 1.5;
+  }
+
+  .fa-body {
+    padding: 26px 30px 30px;
+  }
+
+  .fa-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+  }
+
+  .fa-grid .fa-full {
+    grid-column: 1 / -1;
+  }
+
+  .fa-field {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .fa-field label {
+    font-size: 13px;
+    font-weight: 700;
+    color: #334155;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .fa-field label .fa-ic {
+    font-size: 15px;
+  }
+
+  .fa-field input,
+  .fa-field select,
+  .fa-field textarea {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 11px 13px;
+    border: 1.5px solid #cbd5e1;
+    border-radius: 10px;
+    font-size: 14px;
+    font-family: inherit;
+    color: #0f172a;
+    background: #f8fafc;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+  }
+
+  .fa-field input:focus,
+  .fa-field select:focus,
+  .fa-field textarea:focus {
+    outline: none;
+    border-color: #2563eb;
+    background: #ffffff;
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
+  }
+
+  .fa-hint {
+    font-size: 12px;
+    color: #64748b;
+    line-height: 1.4;
+  }
+
+  .fa-acoes {
+    margin-top: 24px;
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+  }
+
+  .fa-btn {
+    padding: 12px 28px;
+    border: none;
+    border-radius: 10px;
+    font-size: 14px;
+    font-weight: 700;
+    cursor: pointer;
+    background: linear-gradient(135deg, #2563eb 0%, #3b82f6 100%);
+    color: #ffffff;
+    box-shadow: 0 4px 12px -4px rgba(37, 99, 235, 0.5);
+    transition: transform 0.15s ease, box-shadow 0.15s ease, opacity 0.15s ease;
+  }
+
+  .fa-btn:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 6px 16px -4px rgba(37, 99, 235, 0.55);
+  }
+
+  .fa-btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    transform: none;
+  }
+
+  .fa-info {
+    margin-top: 18px;
+    padding: 12px 16px;
+    border-radius: 10px;
+    background: #eff6ff;
+    border: 1px solid #bfdbfe;
+    color: #1e40af;
+    font-size: 13px;
+    line-height: 1.5;
+    display: flex;
+    gap: 10px;
+    align-items: flex-start;
+  }
+
+  .fa-msg {
+    margin-top: 16px;
+    border-radius: 10px;
+    padding: 13px 16px;
+    font-size: 13px;
+    font-weight: 600;
+    line-height: 1.5;
+  }
+
+  @media (max-width: 640px) {
+    .fa-grid {
+      grid-template-columns: 1fr;
+    }
+    .fa-body,
+    .fa-head {
+      padding-left: 20px;
+      padding-right: 20px;
+    }
+  }
+</style>
+
+<div class="fa-wrap">
 
   <div class="page-header">
     <div>
@@ -14,51 +189,71 @@ Arquivo: FormularioAcesso.html
     </div>
   </div>
 
-  <div class="panel formulario-acesso-panel">
-    <p class="formulario-acesso-descricao">
-      Preencha os dados abaixo para solicitar o perfil de
-      <strong>Gestor de Conteúdo</strong>. A solicitação será
-      encaminhada ao Gestor do Sistema para aprovação.
-    </p>
+  <div class="fa-card">
 
-    <div class="form-group">
-      <label for="acesso-nome">Nome completo *</label>
-      <input type="text" id="acesso-nome" maxlength="150" autocomplete="name" required>
+    <div class="fa-head">
+      <h2>🔑 Solicitação de Acesso</h2>
+      <p>
+        Preencha os dados abaixo para solicitar o perfil de
+        <strong>Gestor de Conteúdo</strong>. A solicitação será encaminhada
+        ao Gestor do Sistema para aprovação.
+      </p>
     </div>
 
-    <div class="form-group">
-      <label for="acesso-comarca">Comarca onde trabalha *</label>
-      <input type="text" id="acesso-comarca" maxlength="150" list="lista-comarcas-formulario" autocomplete="off" required>
-      <datalist id="lista-comarcas-formulario"></datalist>
-      <small class="form-hint">Digite o nome da comarca (ex.: Vitória, Cariacica, Cachoeiro de Itapemirim).</small>
+    <div class="fa-body">
+
+      <div class="fa-grid">
+
+        <div class="fa-field">
+          <label for="acesso-nome"><span class="fa-ic">👤</span> Nome completo *</label>
+          <input type="text" id="acesso-nome" maxlength="150" autocomplete="name" placeholder="Seu nome completo" required>
+        </div>
+
+        <div class="fa-field">
+          <label for="acesso-comarca"><span class="fa-ic">🏛️</span> Comarca onde trabalha *</label>
+          <input type="text" id="acesso-comarca" maxlength="150" list="lista-comarcas-formulario" autocomplete="off" placeholder="Ex.: Vitória" required>
+          <datalist id="lista-comarcas-formulario"></datalist>
+        </div>
+
+        <div class="fa-field fa-full">
+          <label for="acesso-email"><span class="fa-ic">📧</span> E-mail institucional *</label>
+          <input type="email" id="acesso-email" maxlength="150" autocomplete="email" placeholder="nome@tjes.jus.br" required>
+          <span class="fa-hint">Utilize o e-mail corporativo do TJES (@tjes.jus.br).</span>
+        </div>
+
+        <div class="fa-field fa-full">
+          <label for="acesso-perfil"><span class="fa-ic">🎖️</span> Perfil solicitado *</label>
+          <select id="acesso-perfil" required>
+            <option value="GESTOR_CONTEUDO">Gestor de Conteúdo — edita telefones do sistema</option>
+          </select>
+        </div>
+
+        <div class="fa-field fa-full">
+          <label for="acesso-justificativa"><span class="fa-ic">✍️</span> Justificativa *</label>
+          <textarea id="acesso-justificativa" rows="4" maxlength="2000" minlength="10" placeholder="Descreva o motivo da solicitação de acesso..." required></textarea>
+          <span class="fa-hint">Mínimo de 10 caracteres.</span>
+        </div>
+
+      </div>
+
+      <div class="fa-info">
+        <span>ℹ️</span>
+        <span>
+          Após o envio, o Gestor do Sistema receberá um e-mail com a sua
+          solicitação e você será notificado assim que ela for analisada.
+        </span>
+      </div>
+
+      <div id="formulario-acesso-mensagem" class="fa-msg hidden" role="alert"></div>
+
+      <div class="fa-acoes">
+        <button type="button" id="btn-enviar-formulario-acesso" class="fa-btn" onclick="enviarFormularioAcesso()">
+          Enviar solicitação →
+        </button>
+      </div>
+
     </div>
 
-    <div class="form-group">
-      <label for="acesso-email">E-mail institucional *</label>
-      <input type="email" id="acesso-email" maxlength="150" autocomplete="email" required>
-      <small class="form-hint">Utilize o e-mail corporativo do TJES (@tjes.jus.br).</small>
-    </div>
-
-    <div class="form-group">
-      <label for="acesso-perfil">Perfil solicitado *</label>
-      <select id="acesso-perfil" required>
-        <option value="GESTOR_CONTEUDO">Gestor de Conteúdo</option>
-      </select>
-    </div>
-
-    <div class="form-group">
-      <label for="acesso-justificativa">Justificativa *</label>
-      <textarea id="acesso-justificativa" rows="4" maxlength="2000" minlength="10" placeholder="Descreva o motivo da solicitação de acesso..." required></textarea>
-      <small class="form-hint">Mínimo de 10 caracteres.</small>
-    </div>
-
-    <div id="formulario-acesso-mensagem" class="hidden" role="alert"></div>
-
-    <div class="formulario-acesso-acoes">
-      <button type="button" id="btn-enviar-formulario-acesso" class="btn btn-primary" onclick="enviarFormularioAcesso()">
-        Enviar solicitação
-      </button>
-    </div>
   </div>
 
 </div>
@@ -121,13 +316,8 @@ function exibirMensagemFormularioAcesso(mensagem, tipo) {
 
   elemento.textContent = (sucesso ? "✅ " : "⚠️ ") + String(mensagem || "");
   elemento.style.backgroundColor = sucesso ? "#dcfce7" : "#fee2e2";
-  elemento.style.color = sucesso ? "#166534" : "#991b1b";
   elemento.style.border = "1px solid " + (sucesso ? "#bbf7d0" : "#fecaca");
-  elemento.style.borderRadius = "8px";
-  elemento.style.padding = "12px 14px";
-  elemento.style.marginTop = "14px";
-  elemento.style.fontSize = "13px";
-  elemento.style.fontWeight = "600";
+  elemento.style.color = sucesso ? "#166534" : "#991b1b";
   elemento.classList.remove("hidden");
 }
 
@@ -135,7 +325,7 @@ function limparMensagemFormularioAcesso() {
   var elemento = document.getElementById("formulario-acesso-mensagem");
   if (!elemento) return;
   elemento.textContent = "";
-  elemento.className = "hidden";
+  elemento.className = "fa-msg hidden";
 }
 
 function enviarFormularioAcesso() {
@@ -194,7 +384,7 @@ function enviarFormularioAcesso() {
     function(resposta) {
       if (botao) {
         botao.disabled = false;
-        botao.textContent = "Enviar solicitação";
+        botao.textContent = "Enviar solicitação →";
       }
 
       if (resposta && resposta.sucesso === true) {
@@ -221,7 +411,7 @@ function enviarFormularioAcesso() {
     function(erro) {
       if (botao) {
         botao.disabled = false;
-        botao.textContent = "Enviar solicitação";
+        botao.textContent = "Enviar solicitação →";
       }
 
       exibirMensagemFormularioAcesso(

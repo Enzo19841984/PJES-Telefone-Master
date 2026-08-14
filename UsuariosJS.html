@@ -1,0 +1,235 @@
+<script>
+/**
+ * ==========================================================
+ * SISTEMA DE TELEFONES TJES
+ * Arquivo: UsuariosJS.html
+ * ==========================================================
+ */
+
+function carregarUsuarios() {
+  if (
+    typeof API === "undefined" ||
+    typeof API.listarUsuarios !== "function"
+  ) {
+    return;
+  }
+
+  API.listarUsuarios(
+    function(resposta) {
+      if (!resposta || resposta.sucesso !== true) {
+        exibirErroUsuarios(
+          (resposta && resposta.erro) || "Erro ao carregar usuários."
+        );
+        return;
+      }
+
+      renderizarUsuarios(
+        Array.isArray(resposta.dados) ? resposta.dados : []
+      );
+    },
+    function(erro) {
+      exibirErroUsuarios(
+        (erro && erro.message) || "Falha de comunicação com o servidor."
+      );
+    }
+  );
+}
+
+function exibirErroUsuarios(mensagem) {
+  var tbody = document.getElementById("corpo-tabela-usuarios");
+  if (!tbody) return;
+
+  tbody.textContent = "";
+
+  var tr = document.createElement("tr");
+  var td = document.createElement("td");
+
+  td.colSpan = 6;
+  td.textContent = "⚠️ " + String(mensagem || "");
+  td.style.textAlign = "center";
+  td.style.color = "#dc2626";
+  td.style.padding = "20px";
+
+  tr.appendChild(td);
+  tbody.appendChild(tr);
+}
+
+function renderizarUsuarios(lista) {
+  var tbody = document.getElementById("corpo-tabela-usuarios");
+  if (!tbody) return;
+
+  tbody.textContent = "";
+
+  if (lista.length === 0) {
+    var tr = document.createElement("tr");
+    var td = document.createElement("td");
+
+    td.colSpan = 6;
+    td.textContent = "Nenhum usuário cadastrado.";
+    td.style.textAlign = "center";
+    td.style.color = "#64748b";
+    td.style.padding = "20px";
+
+    tr.appendChild(td);
+    tbody.appendChild(tr);
+    return;
+  }
+
+  lista.forEach(function(usuario) {
+    var tr = document.createElement("tr");
+
+    tr.appendChild(criarCelulaUsuario(usuario.email || "-"));
+    tr.appendChild(criarCelulaUsuario(usuario.nome || "-"));
+
+    var tdPerfil = criarCelulaUsuario("");
+    var selectPerfil = document.createElement("select");
+    selectPerfil.className = "usuario-perfil-select";
+    selectPerfil.style.width = "100%";
+    selectPerfil.style.padding = "6px 8px";
+    selectPerfil.style.borderRadius = "8px";
+    selectPerfil.style.border = "1px solid #cbd5e1";
+    selectPerfil.style.background = "#ffffff";
+    selectPerfil.style.fontSize = "13px";
+
+    var perfis = [
+      { valor: "GESTOR_SISTEMA", rotulo: "Gestor do Sistema" },
+      { valor: "GESTOR_CONTEUDO", rotulo: "Gestor de Conteúdo" },
+      { valor: "USUARIO_CONSULTA", rotulo: "Visitante" }
+    ];
+
+    perfis.forEach(function(opcao) {
+      var option = document.createElement("option");
+      option.value = opcao.valor;
+      option.textContent = opcao.rotulo;
+      selectPerfil.appendChild(option);
+    });
+
+    selectPerfil.value =
+      ["GESTOR_SISTEMA", "GESTOR_CONTEUDO", "USUARIO_CONSULTA"].includes(
+        String(usuario.perfil || "").toUpperCase()
+      )
+        ? String(usuario.perfil).toUpperCase()
+        : "USUARIO_CONSULTA";
+
+    tdPerfil.appendChild(selectPerfil);
+    tr.appendChild(tdPerfil);
+
+    var tdComarcas = criarCelulaUsuario("");
+    var inputComarcas = document.createElement("input");
+    inputComarcas.type = "text";
+    inputComarcas.className = "usuario-comarcas-input";
+    inputComarcas.placeholder = "Todas";
+    inputComarcas.maxLength = 500;
+    inputComarcas.value = String(usuario.comarcas || "");
+    inputComarcas.style.width = "100%";
+    inputComarcas.style.padding = "6px 8px";
+    inputComarcas.style.borderRadius = "8px";
+    inputComarcas.style.border = "1px solid #cbd5e1";
+    inputComarcas.style.fontSize = "13px";
+    inputComarcas.title = "Separe por vírgula. Vazio = todas as comarcas.";
+
+    tdComarcas.appendChild(inputComarcas);
+    tr.appendChild(tdComarcas);
+
+    var tdAtivo = criarCelulaUsuario("");
+    tdAtivo.style.textAlign = "center";
+
+    var checkboxAtivo = document.createElement("input");
+    checkboxAtivo.type = "checkbox";
+    checkboxAtivo.checked = usuario.ativo === true;
+    checkboxAtivo.className = "usuario-ativo-checkbox";
+
+    tdAtivo.appendChild(checkboxAtivo);
+    tr.appendChild(tdAtivo);
+
+    var tdAcoes = criarCelulaUsuario("");
+    tdAcoes.style.textAlign = "center";
+    tdAcoes.style.whiteSpace = "nowrap";
+
+    var botaoSalvar = document.createElement("button");
+    botaoSalvar.type = "button";
+    botaoSalvar.className = "btn btn-primary";
+    botaoSalvar.textContent = "💾 Salvar";
+    botaoSalvar.style.padding = "5px 12px";
+    botaoSalvar.style.fontSize = "12px";
+
+    botaoSalvar.addEventListener("click", function() {
+      salvarUsuario(
+        usuario.email,
+        selectPerfil.value,
+        checkboxAtivo.checked,
+        inputComarcas.value,
+        botaoSalvar
+      );
+    });
+
+    tdAcoes.appendChild(botaoSalvar);
+    tr.appendChild(tdAcoes);
+
+    tbody.appendChild(tr);
+  });
+}
+
+function criarCelulaUsuario(valor) {
+  var td = document.createElement("td");
+
+  td.textContent =
+    valor === null || valor === undefined || String(valor).trim() === ""
+      ? "-"
+      : String(valor);
+
+  td.style.fontSize = "13px";
+
+  return td;
+}
+
+function salvarUsuario(email, perfil, ativo, comarcas, botao) {
+  if (
+    !confirm(
+      "Salvar alterações para " + email + "?\n\n" +
+      "Perfil: " + perfil + "\n" +
+      "Ativo: " + (ativo ? "SIM" : "NÃO") + "\n" +
+      "Comarcas: " + (String(comarcas || "").trim() || "Todas")
+    )
+  ) {
+    return;
+  }
+
+  var textoOriginal = botao.textContent;
+  botao.disabled = true;
+  botao.textContent = "Salvando...";
+
+  API.atualizarUsuario(
+    email,
+    {
+      perfil: perfil,
+      ativo: ativo,
+      comarcas: comarcas
+    },
+    function(resposta) {
+      botao.disabled = false;
+      botao.textContent = textoOriginal;
+
+      if (!resposta || resposta.sucesso !== true) {
+        mostrarToast(
+          (resposta && resposta.erro) || "Erro ao salvar usuário.",
+          "error"
+        );
+        return;
+      }
+
+      mostrarToast("Usuário atualizado com sucesso!", "success");
+      carregarUsuarios();
+    },
+    function(erro) {
+      botao.disabled = false;
+      botao.textContent = textoOriginal;
+
+      mostrarToast(
+        (erro && erro.message) || "Falha de comunicação com o servidor.",
+        "error"
+      );
+    }
+  );
+}
+</script>

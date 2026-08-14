@@ -123,6 +123,54 @@ class Database {
     return this.getSheet(CONFIG.SHEETS.USUARIOS);
   }
 
+  /**
+   * Retorna a aba de solicitações de acesso.
+   *
+   * Aceita tanto o nome canônico ("Solicitações de Acesso do sistema")
+   * quanto o nome legado ("SOLICITACOES_ACESSO") de instalações antigas.
+   */
+  solicitacoesAcesso() {
+    const spreadsheet = this.getSpreadsheet();
+
+    const nomes =
+      [
+        CONFIG.SHEETS.SOLICITACOES_ACESSO,
+        CONFIG.SHEETS.SOLICITACOES_ACESSO_LEGADO
+      ].filter(Boolean);
+
+    const chaveAlvo =
+      normalizarChave(CONFIG.SHEETS.SOLICITACOES_ACESSO);
+
+    for (const nome of nomes) {
+      const sheet = spreadsheet.getSheetByName(nome);
+
+      if (sheet) {
+        return sheet;
+      }
+
+      if (normalizarChave(nome) === chaveAlvo) {
+        continue;
+      }
+    }
+
+    const abas =
+      spreadsheet
+        .getSheets()
+        .find(sheet =>
+          normalizarChave(sheet.getName()) === chaveAlvo
+        );
+
+    if (abas) {
+      return abas;
+    }
+
+    throw new Error(
+      "A aba '" +
+      CONFIG.SHEETS.SOLICITACOES_ACESSO +
+      "' não existe na planilha. Execute instalarSistema()."
+    );
+  }
+
   log() {
     return this.getSheet(CONFIG.SHEETS.LOG);
   }

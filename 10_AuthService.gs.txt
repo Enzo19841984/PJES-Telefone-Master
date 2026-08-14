@@ -27,30 +27,20 @@ class AuthService {
   }
 
   /**
-   * A sessão do aplicativo fica vinculada
-   * ao usuário Google ativo.
+   * A identidade do usuário vem da conta Google ativa.
+   *
+   * Com a implantação em versão única (acesso "Qualquer pessoa com
+   * conta Google"), o Session.getActiveUser() é confiável e dispensa
+   * o cache de sessão — não existe mais sessão "velha" entre telas.
    */
   obterEmailDaSessao() {
-    const sessaoAtiva = this.cache.get("sessaoAplicacaoAtiva") === "SIM";
-
-    if (!sessaoAtiva) {
-      return "";
-    }
-
-    const emailCache = normalizarEmail(this.cache.get("emailLogado") || "");
-
     const emailAtivo = AuthService.obterEmailAtivo();
 
-    /**
-     * Nunca confia apenas no cache.
-     * O e-mail da sessão deve ser o mesmo
-     * da conta Google atualmente ativa.
-     */
-    if (!emailCache || !emailAtivo || emailCache !== emailAtivo || !emailInstitucional(emailCache)) {
+    if (!emailAtivo || !emailInstitucional(emailAtivo)) {
       return "";
     }
 
-    return emailCache;
+    return emailAtivo;
   }
 
   /**
@@ -110,7 +100,8 @@ class AuthService {
         nome: "Visitante",
         perfil: CONFIG.PERFIS.USUARIO_CONSULTA,
         logado: false,
-        ativo: false
+        ativo: false,
+        comarcas: []
       };
     }
 
@@ -120,7 +111,8 @@ class AuthService {
         nome: "Visitante",
         perfil: CONFIG.PERFIS.USUARIO_CONSULTA,
         logado: false,
-        ativo: false
+        ativo: false,
+        comarcas: []
       };
     }
 
@@ -131,7 +123,8 @@ class AuthService {
       nome: usuario.nome || this.email.split("@")[0],
       perfil: usuario.ativo ? usuario.perfil : CONFIG.PERFIS.USUARIO_CONSULTA,
       logado: true,
-      ativo: usuario.ativo === true
+      ativo: usuario.ativo === true,
+      comarcas: usuario.comarcas || []
     };
   }
 
@@ -142,6 +135,10 @@ class AuthService {
     const sheet = DB.usuarios();
 
     const dados = DB.read(sheet);
+
+    const mapa = DB.map(sheet);
+
+    const idxComarcas = mapa.COMARCAS;
 
     for (const linha of dados) {
       const emailLinha = normalizarEmail(linha[0]);
@@ -166,11 +163,17 @@ class AuthService {
 
       const ativo = paraBoolean(linha[3]);
 
+      const comarcas =
+        idxComarcas !== undefined
+          ? parseComarcas(linha[idxComarcas - 1])
+          : [];
+
       return {
         email: emailLinha,
         nome: nome,
         perfil: ativo ? perfilSeguro : CONFIG.PERFIS.USUARIO_CONSULTA,
-        ativo: ativo
+        ativo: ativo,
+        comarcas: comarcas
       };
     }
 
@@ -182,7 +185,8 @@ class AuthService {
       email: normalizarEmail(email),
       nome: normalizarEmail(email).split("@")[0],
       perfil: CONFIG.PERFIS.USUARIO_CONSULTA,
-      ativo: false
+      ativo: false,
+      comarcas: []
     };
   }
 
@@ -237,6 +241,58 @@ class AuthService {
 
     if (usuario.perfil !== perfilNecessario) {
       throw new Error("Acesso permitido somente para " + perfilNecessario + ".");
+    }
+
+    return true;
+  }
+
+  /**
+   * Verifica se o usuário pode atuar na comarca informada.
+   *
+   * - GESTOR_SISTEMA: pode atuar em todas as comarcas.
+   * - GESTOR_CONTEUDO: somente nas comarcas da coluna COMARCAS
+   *   (vazia = todas as comarcas).
+   * - Demais perfis: sem permissão de edição.
+   */
+  exigirPermissaoComarca(comarca) {
+    const usuario = this.usuarioAtual();
+
+    if (!usuario.logado) {
+      throw new Error("É necessário estar autenticado.");
+    }
+
+    if (usuario.perfil === CONFIG.PERFIS.GESTOR_SISTEMA) {
+      return true;
+    }
+
+    if (usuario.perfil !== CONFIG.PERFIS.GESTOR_CONTEUDO) {
+      throw new Error("Usuário sem permissão para editar telefones.");
+    }
+
+    const comarcaNormalizada =
+      normalizarChave(comarca);
+
+    if (!comarcaNormalizada) {
+      throw new Error("Comarca não informada.");
+    }
+
+    const comarcas = usuario.comarcas || [];
+
+    if (comarcas.length === 0) {
+      return true;
+    }
+
+    const permitida =
+      comarcas.some(item =>
+        normalizarChave(item) === comarcaNormalizada
+      );
+
+    if (!permitida) {
+      throw new Error(
+        "Seu perfil permite editar somente as comarcas: " +
+        comarcas.join(", ") +
+        "."
+      );
     }
 
     return true;
