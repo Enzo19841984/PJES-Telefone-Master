@@ -319,18 +319,38 @@ function atualizarInterfaceUsuario() {
       !logado
     ) {
       /* Conta Google identificada, porém sem cargo administrativo. */
+      var emailSessao3 = String(
+        (typeof window.SESSAO_EMAIL !== "undefined" && window.SESSAO_EMAIL) || ""
+      ).trim();
+
+      var dominioSessao = String(
+        (typeof window.DOMINIO_INSTITUCIONAL !== "undefined" && window.DOMINIO_INSTITUCIONAL) || ""
+      ).trim();
+
+      var ehInstitucional =
+        dominioSessao &&
+        emailSessao3.toLowerCase().endsWith("@" + dominioSessao.toLowerCase());
+
       configurarBotaoAcesso(
         btnAcesso,
         textoAcesso,
-        {
-          texto: "Solicitar Acesso",
-          fundo: "#fef3c7",
-          borda: "#f59e0b",
-          cor: "#92400e",
-          acao: function() {
-            mostrarView("formulario-acesso-view");
-          }
-        }
+        ehInstitucional
+          ? {
+              texto: "Solicitar Acesso",
+              fundo: "#fef3c7",
+              borda: "#f59e0b",
+              cor: "#92400e",
+              acao: function() {
+                mostrarView("formulario-acesso-view");
+              }
+            }
+          : {
+              texto: "Trocar de conta Google",
+              fundo: "#fee2e2",
+              borda: "#dc2626",
+              cor: "#991b1b",
+              acao: fazerLogin
+            }
       );
     } else if (
       perfil === "USUARIO_CONSULTA"
@@ -464,8 +484,8 @@ function formatarPerfil(perfil) {
 
 function fazerLogin() {
   /*
-   * No preview do editor o reload quebra (página branca) e o
-   * login é impossível — avisa e aponta para a URL real.
+   * No preview do editor o login é impossível — avisa e aponta
+   * para a URL real.
    */
   if (emPreviewEditor()) {
     mostrarAvisoPreview();
@@ -477,13 +497,33 @@ function fazerLogin() {
   }
 
   /*
-   * Recarrega a PRÓPRIA janela (window.location, não window.top):
-   * o app pode estar em um iframe onde acessar window.top é
-   * bloqueado por política de origem. Com a implantação "Qualquer
-   * pessoa com conta Google", o próprio Google pede a conta ao
-   * carregar o app.
+   * Várias contas Google logadas no navegador: o Google pode usar
+   * a conta errada (ex.: conta pessoal), deixando o usuário como
+   * visitante. O seletor de contas com dica de domínio institucional
+   * (hd=) força a escolha da conta @<dominio>.
    */
-  window.location.reload();
+  var dominio = String(
+    (typeof window.DOMINIO_INSTITUCIONAL !== "undefined" && window.DOMINIO_INSTITUCIONAL) || ""
+  ).trim();
+
+  var destino =
+    String(window.location.href || "").trim() ||
+    String(window.URL_SISTEMA || "").trim();
+
+  if (!destino) {
+    mostrarToast("URL do sistema não disponível.", "error");
+    return;
+  }
+
+  var urlLogin =
+    "https://accounts.google.com/AccountChooser" +
+    "?continue=" +
+    encodeURIComponent(destino) +
+    (dominio ? "&hd=" + encodeURIComponent(dominio) : "") +
+    "&flowName=GlifWebSignIn" +
+    "&flowEntry=AccountChooser";
+
+  window.location.href = urlLogin;
 }
 
 /**

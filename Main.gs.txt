@@ -46,6 +46,7 @@ function prepararTemplateAplicacao(template) {
   template.urlSistema = obterUrlSistema();
   template.sistemaNome = CONFIG.SISTEMA.NOME;
   template.sistemaVersao = CONFIG.SISTEMA.VERSAO;
+  template.dominioInstitucional = CONFIG.AUTH.DOMINIO_INSTITUCIONAL;
   return template;
 }
 
@@ -222,6 +223,7 @@ function include(nomeArquivo) {
   template.sistemaNome = CONFIG.SISTEMA.NOME;
   template.sistemaVersao = CONFIG.SISTEMA.VERSAO;
   template.urlSistema = obterUrlSistema();
+  template.dominioInstitucional = CONFIG.AUTH.DOMINIO_INSTITUCIONAL;
   template.mostrarModalAcesso = false;
   return template.evaluate().getContent();
 }

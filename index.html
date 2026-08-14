@@ -28,12 +28,14 @@ Arquivo: index.html
       var SISTEMA_VERSAO = <?!= JSON.stringify(sistemaVersao || "") ?>;
       var PERFIL_ADMIN = <?!= JSON.stringify(perfilAdmin || "") ?>;
       var SESSAO_EMAIL = <?!= JSON.stringify(sessaoEmail || "") ?>;
+      var DOMINIO_INSTITUCIONAL = <?!= JSON.stringify(dominioInstitucional || "") ?>;
 
       window.URL_SISTEMA = URL_SISTEMA;
       window.SISTEMA_NOME = SISTEMA_NOME;
       window.SISTEMA_VERSAO = SISTEMA_VERSAO;
       window.PERFIL_ADMIN = PERFIL_ADMIN;
       window.SESSAO_EMAIL = SESSAO_EMAIL;
+      window.DOMINIO_INSTITUCIONAL = DOMINIO_INSTITUCIONAL;
     </script>
 
     <div id="app"><?!= include("Layout"); ?></div>
