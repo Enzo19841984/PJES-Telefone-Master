@@ -149,7 +149,7 @@ function renderizarSolicitacoes(
       );
 
     td.colSpan =
-      5;
+      6;
 
     td.textContent =
       "Nenhuma solicitação pendente.";
@@ -184,6 +184,12 @@ function renderizarSolicitacoes(
     tr.appendChild(
       criarCelulaSolicitacao(
         sol.nome
+      )
+    );
+
+    tr.appendChild(
+      criarCelulaSolicitacao(
+        sol.comarca
       )
     );
 

@@ -211,21 +211,97 @@ function criarAbaUsuarios(
 function criarAbaSolicitacoesAcesso(
   spreadsheet
 ) {
-  return garantirAbaComCabecalho(
+  const sheet =
+    garantirAbaComCabecalho(
+      spreadsheet,
+      CONFIG.SHEETS.SOLICITACOES_ACESSO,
+      [
+        "ID",
+        "EMAIL",
+        "NOME",
+        "COMARCA",
+        "PERFIL_SOLICITADO",
+        "JUSTIFICATIVA",
+        "STATUS",
+        "DATA_SOLICITACAO",
+        "APROVADOR",
+        "DATA_APROVACAO"
+      ]
+    );
+
+  garantirColunaComarca(
     spreadsheet,
-    CONFIG.SHEETS.SOLICITACOES_ACESSO,
-    [
-      "ID",
-      "EMAIL",
-      "NOME",
-      "PERFIL_SOLICITADO",
-      "JUSTIFICATIVA",
-      "STATUS",
-      "DATA_SOLICITACAO",
-      "APROVADOR",
-      "DATA_APROVACAO"
-    ]
+    sheet
   );
+
+  return sheet;
+}
+
+/**
+ * Migração: garante a coluna COMARCA na aba
+ * SOLICITACOES_ACESSO de instalações antigas.
+ *
+ * A coluna é inserida logo após NOME, preservando
+ * os dados já existentes (as demais colunas são
+ * deslocadas para a direita).
+ */
+function garantirColunaComarca(
+  spreadsheet,
+  sheet
+) {
+  const headers = DB.headers(sheet);
+
+  const temComarca =
+    headers.some(header =>
+      normalizarChave(header) === "COMARCA"
+    );
+
+  if (temComarca) {
+    return sheet;
+  }
+
+  const indiceNome =
+    headers.findIndex(header =>
+      normalizarChave(header) === "NOME"
+    );
+
+  const posicao =
+    indiceNome >= 0
+      ? indiceNome + 2
+      : headers.length + 1;
+
+  sheet.insertColumns(posicao, 1);
+  sheet.getRange(1, posicao).setValue("COMARCA");
+
+  return sheet;
+}
+
+/**
+ * Executa apenas a migração da aba SOLICITACOES_ACESSO
+ * (adiciona a coluna COMARCA em instalações antigas).
+ */
+function atualizarAbaSolicitacoesAcesso() {
+  const spreadsheet = DB.getSpreadsheet();
+
+  const sheet =
+    spreadsheet.getSheetByName(
+      CONFIG.SHEETS.SOLICITACOES_ACESSO
+    );
+
+  if (!sheet) {
+    throw new Error(
+      "Aba SOLICITACOES_ACESSO não encontrada. Execute instalarSistema() primeiro."
+    );
+  }
+
+  garantirColunaComarca(
+    spreadsheet,
+    sheet
+  );
+
+  SpreadsheetApp.flush();
+
+  return "Coluna COMARCA garantida na aba SOLICITACOES_ACESSO.";
 }
 
 /**

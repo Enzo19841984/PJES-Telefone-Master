@@ -217,7 +217,9 @@ class TelefoneRepository {
         case "COMARCA": return textoSeguro(valorObjeto(objeto, "comarca", "Comarca"));
         case "SETOR": return textoSeguro(valorObjeto(objeto, "setor", "Setor"));
         case "TIPO": return textoSeguro(valorObjeto(objeto, "tipo", "Tipo"));
-        case "NUMERO": return textoSeguro(valorObjeto(objeto, "numero", "Numero", "TELEFONE", "Telefone"));
+        case "NUMERO":
+        case "TELEFONE":
+          return textoSeguro(valorObjeto(objeto, "numero", "Numero", "TELEFONE", "Telefone"));
         case "RAMAL": return textoSeguro(valorObjeto(objeto, "ramal", "Ramal"));
         case "WHATSAPP": return textoSeguro(valorObjeto(objeto, "whatsapp", "Whatsapp", "WhatsApp"));
         case "E_MAIL": case "EMAIL": return textoSeguro(valorObjeto(objeto, "email", "EMAIL", "E_MAIL"));

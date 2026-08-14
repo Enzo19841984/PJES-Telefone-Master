@@ -1,0 +1,260 @@
+<!--
+==========================================================
+SISTEMA DE TELEFONES TJES
+Arquivo: FormularioAcesso.html
+==========================================================
+-->
+
+<div class="formulario-acesso-container">
+
+  <div class="page-header">
+    <div>
+      <h2>Formulário de Acesso</h2>
+      <p>Solicite acesso administrativo ao sistema</p>
+    </div>
+  </div>
+
+  <div class="panel formulario-acesso-panel">
+    <p class="formulario-acesso-descricao">
+      Preencha os dados abaixo para solicitar o perfil de
+      <strong>Gestor de Conteúdo</strong>. A solicitação será
+      encaminhada ao Gestor do Sistema para aprovação.
+    </p>
+
+    <div class="form-group">
+      <label for="acesso-nome">Nome completo *</label>
+      <input type="text" id="acesso-nome" maxlength="150" autocomplete="name" required>
+    </div>
+
+    <div class="form-group">
+      <label for="acesso-comarca">Comarca onde trabalha *</label>
+      <input type="text" id="acesso-comarca" maxlength="150" list="lista-comarcas-formulario" autocomplete="off" required>
+      <datalist id="lista-comarcas-formulario"></datalist>
+      <small class="form-hint">Digite o nome da comarca (ex.: Vitória, Cariacica, Cachoeiro de Itapemirim).</small>
+    </div>
+
+    <div class="form-group">
+      <label for="acesso-email">E-mail institucional *</label>
+      <input type="email" id="acesso-email" maxlength="150" autocomplete="email" required>
+      <small class="form-hint">Utilize o e-mail corporativo do TJES (@tjes.jus.br).</small>
+    </div>
+
+    <div class="form-group">
+      <label for="acesso-perfil">Perfil solicitado *</label>
+      <select id="acesso-perfil" required>
+        <option value="GESTOR_CONTEUDO">Gestor de Conteúdo</option>
+      </select>
+    </div>
+
+    <div class="form-group">
+      <label for="acesso-justificativa">Justificativa *</label>
+      <textarea id="acesso-justificativa" rows="4" maxlength="2000" minlength="10" placeholder="Descreva o motivo da solicitação de acesso..." required></textarea>
+      <small class="form-hint">Mínimo de 10 caracteres.</small>
+    </div>
+
+    <div id="formulario-acesso-mensagem" class="hidden" role="alert"></div>
+
+    <div class="formulario-acesso-acoes">
+      <button type="button" id="btn-enviar-formulario-acesso" class="btn btn-primary" onclick="enviarFormularioAcesso()">
+        Enviar solicitação
+      </button>
+    </div>
+  </div>
+
+</div>
+
+<script>
+/**
+ * Preenche a lista de comarcas sugeridas a partir dos
+ * telefones já carregados (quando disponível).
+ */
+function preencherComarcasFormulario() {
+  var datalist = document.getElementById("lista-comarcas-formulario");
+  var datalistModal = document.getElementById("lista-comarcas-modal");
+  if (!datalist && !datalistModal) return;
+
+  var comarcas = {};
+
+  if (
+    typeof listaTelefones !== "undefined" &&
+    Array.isArray(listaTelefones)
+  ) {
+    listaTelefones.forEach(function(item) {
+      var comarca = String(
+        (item && (item.comarca || item.COMARCA)) || ""
+      ).trim();
+
+      if (comarca && !comarcas[comarca]) {
+        comarcas[comarca] = true;
+      }
+    });
+  }
+
+  var nomes = Object.keys(comarcas).sort(function(a, b) {
+    return a.localeCompare(b, "pt-BR");
+  });
+
+  datalist.textContent = "";
+
+  if (datalistModal) {
+    datalistModal.textContent = "";
+  }
+
+  nomes.forEach(function(nome) {
+    var option = document.createElement("option");
+    option.value = nome;
+    datalist.appendChild(option);
+
+    if (datalistModal) {
+      var optionModal = document.createElement("option");
+      optionModal.value = nome;
+      datalistModal.appendChild(optionModal);
+    }
+  });
+}
+
+function exibirMensagemFormularioAcesso(mensagem, tipo) {
+  var elemento = document.getElementById("formulario-acesso-mensagem");
+  if (!elemento) return;
+
+  var sucesso = tipo === "success";
+
+  elemento.textContent = (sucesso ? "✅ " : "⚠️ ") + String(mensagem || "");
+  elemento.style.backgroundColor = sucesso ? "#dcfce7" : "#fee2e2";
+  elemento.style.color = sucesso ? "#166534" : "#991b1b";
+  elemento.style.border = "1px solid " + (sucesso ? "#bbf7d0" : "#fecaca");
+  elemento.style.borderRadius = "8px";
+  elemento.style.padding = "12px 14px";
+  elemento.style.marginTop = "14px";
+  elemento.style.fontSize = "13px";
+  elemento.style.fontWeight = "600";
+  elemento.classList.remove("hidden");
+}
+
+function limparMensagemFormularioAcesso() {
+  var elemento = document.getElementById("formulario-acesso-mensagem");
+  if (!elemento) return;
+  elemento.textContent = "";
+  elemento.className = "hidden";
+}
+
+function enviarFormularioAcesso() {
+  limparMensagemFormularioAcesso();
+
+  var nome = document.getElementById("acesso-nome").value.trim();
+  var comarca = document.getElementById("acesso-comarca").value.trim();
+  var email = document.getElementById("acesso-email").value.trim().toLowerCase();
+  var perfil = document.getElementById("acesso-perfil").value.trim();
+  var justificativa = document.getElementById("acesso-justificativa").value.trim();
+
+  if (nome.length < 3) {
+    exibirMensagemFormularioAcesso("Informe o seu nome completo.", "error");
+    return;
+  }
+
+  if (comarca.length < 2) {
+    exibirMensagemFormularioAcesso("Informe a comarca em que você trabalha.", "error");
+    return;
+  }
+
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    exibirMensagemFormularioAcesso("Informe um e-mail válido.", "error");
+    return;
+  }
+
+  if (!email.endsWith("@tjes.jus.br")) {
+    exibirMensagemFormularioAcesso("Utilize o e-mail institucional (@tjes.jus.br).", "error");
+    return;
+  }
+
+  if (justificativa.length < 10) {
+    exibirMensagemFormularioAcesso("Descreva a justificativa (mínimo de 10 caracteres).", "error");
+    return;
+  }
+
+  if (typeof API === "undefined" || typeof API.enviarFormularioAcesso !== "function") {
+    exibirMensagemFormularioAcesso("O serviço de solicitações não está disponível.", "error");
+    return;
+  }
+
+  var botao = document.getElementById("btn-enviar-formulario-acesso");
+  if (botao) {
+    botao.disabled = true;
+    botao.textContent = "Enviando...";
+  }
+
+  API.enviarFormularioAcesso(
+    {
+      nome: nome,
+      comarca: comarca,
+      email: email,
+      perfil: perfil,
+      justificativa: justificativa
+    },
+    function(resposta) {
+      if (botao) {
+        botao.disabled = false;
+        botao.textContent = "Enviar solicitação";
+      }
+
+      if (resposta && resposta.sucesso === true) {
+        document.getElementById("acesso-nome").value = "";
+        document.getElementById("acesso-comarca").value = "";
+        document.getElementById("acesso-email").value = "";
+        document.getElementById("acesso-justificativa").value = "";
+
+        exibirMensagemFormularioAcesso(
+          "Solicitação enviada com sucesso! Você receberá o retorno pelo seu e-mail.",
+          "success"
+        );
+
+        if (typeof mostrarToast === "function") {
+          mostrarToast("Solicitação enviada com sucesso!", "success");
+        }
+      } else {
+        exibirMensagemFormularioAcesso(
+          (resposta && resposta.erro) || "Erro ao enviar a solicitação.",
+          "error"
+        );
+      }
+    },
+    function(erro) {
+      if (botao) {
+        botao.disabled = false;
+        botao.textContent = "Enviar solicitação";
+      }
+
+      exibirMensagemFormularioAcesso(
+        (erro && erro.message) || "Falha de comunicação com o servidor.",
+        "error"
+      );
+    }
+  );
+}
+
+document.addEventListener("DOMContentLoaded", function() {
+  var email = "";
+  var nome = "";
+
+  if (
+    typeof usuarioAtual !== "undefined" &&
+    usuarioAtual
+  ) {
+    email = String(usuarioAtual.email || "").trim();
+    nome = String(usuarioAtual.nome || "").trim();
+  }
+
+  var campoEmail = document.getElementById("acesso-email");
+  var campoNome = document.getElementById("acesso-nome");
+
+  if (campoEmail && email && !campoEmail.value) {
+    campoEmail.value = email;
+  }
+
+  if (campoNome && nome && nome !== "Visitante" && !campoNome.value) {
+    campoNome.value = nome;
+  }
+
+  preencherComarcasFormulario();
+});
+</script>

@@ -145,6 +145,19 @@ function atualizarInterfaceUsuario() {
     );
   }
 
+  const menuAlteracoes =
+    document.getElementById(
+      "menu-alteracoes"
+    );
+
+  if (menuAlteracoes) {
+    menuAlteracoes.classList.toggle(
+      "hidden",
+      !logado ||
+        perfil === "USUARIO_CONSULTA"
+    );
+  }
+
   const btnNovo =
     document.getElementById(
       "btn-novo-telefone"

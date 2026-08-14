@@ -59,9 +59,14 @@ const API = {
       .listarHistorico(id);
   },
 
-  solicitarAcesso(nome, perfil, sucesso, erro) {
+  solicitarAcesso(nome, perfil, justificativa, comarca, sucesso, erro) {
     criarRunnerAPI(sucesso, erro)
-      .solicitarAcesso(nome, perfil);
+      .solicitarAcesso(nome, perfil, justificativa, comarca);
+  },
+
+  enviarFormularioAcesso(dados, sucesso, erro) {
+    criarRunnerAPI(sucesso, erro)
+      .enviarFormularioAcesso(dados);
   },
 
   listarSolicitacoes(sucesso, erro) {

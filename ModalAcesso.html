@@ -18,12 +18,23 @@ Arquivo: ModalAcesso.html
         <input type="text" id="solic-nome" maxlength="150" required>
       </div>
 
+      <div class="form-group">
+        <label for="solic-comarca">Comarca onde trabalha</label>
+        <input type="text" id="solic-comarca" maxlength="150" list="lista-comarcas-modal" autocomplete="off">
+        <datalist id="lista-comarcas-modal"></datalist>
+      </div>
+
       <p style="margin: 15px 0 10px;"><strong>Perfil solicitado *</strong></p>
 
       <label>
         <input type="radio" id="check-gestor-conteudo" name="perfil" value="GESTOR_CONTEUDO" checked>
         Gestor de Conteúdo
       </label>
+
+      <div class="form-group" style="margin-top: 15px;">
+        <label for="solic-justificativa">Justificativa</label>
+        <textarea id="solic-justificativa" rows="3" maxlength="2000" placeholder="Descreva o motivo da solicitação (mínimo de 10 caracteres)"></textarea>
+      </div>
 
       <small style="display: block; margin-top: 12px; color: #64748b;">
         Ao enviar, uma solicitação será encaminhada ao Gestor do Sistema para aprovação.
@@ -51,6 +62,8 @@ function abrirModalAcesso() {
   // Utilizador logado – mostra o formulário
   document.getElementById("modal-acesso").classList.remove("hidden");
   document.getElementById("solic-nome").value = "";
+  document.getElementById("solic-comarca").value = "";
+  document.getElementById("solic-justificativa").value = "";
   document.getElementById("check-gestor-conteudo").checked = true;
   document.getElementById("form-mensagem-erro").classList.add("hidden");
 }
@@ -63,6 +76,15 @@ function enviarSolicitacaoAcesso() {
   var nome = document.getElementById("solic-nome").value.trim();
   if (nome.length < 3) {
     document.getElementById("form-mensagem-erro").innerText = "Informe o seu nome completo.";
+    document.getElementById("form-mensagem-erro").classList.remove("hidden");
+    return;
+  }
+
+  var comarca = document.getElementById("solic-comarca").value.trim();
+
+  var justificativa = document.getElementById("solic-justificativa").value.trim();
+  if (justificativa.length > 0 && justificativa.length < 10) {
+    document.getElementById("form-mensagem-erro").innerText = "Descreva a justificativa (mínimo de 10 caracteres).";
     document.getElementById("form-mensagem-erro").classList.remove("hidden");
     return;
   }
@@ -80,7 +102,7 @@ function enviarSolicitacaoAcesso() {
   botao.disabled = true;
   botao.textContent = "Enviando...";
 
-  API.solicitarAcesso(nome, perfil,
+  API.solicitarAcesso(nome, perfil, justificativa, comarca,
     function(res) {
       if (res && res.sucesso) {
         fecharModalAcesso();

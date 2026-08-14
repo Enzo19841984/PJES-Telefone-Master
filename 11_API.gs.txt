@@ -355,6 +355,68 @@ function encerrarSessao() {
  * ==========================================================
  */
 
+/**
+ * Mapa de colunas da aba SOLICITACOES_ACESSO.
+ *
+ * Usa os cabeçalhos da planilha em vez de posições fixas,
+ * tornando o código resiliente a reordenações e à coluna
+ * COMARCA (presente em instalações novas e adicionada por
+ * migração em instalações antigas).
+ */
+function indicesSolicitacao(linhaCabecalho) {
+  const alvos = {
+    ID: ["ID"],
+    EMAIL: ["EMAIL"],
+    NOME: ["NOME"],
+    COMARCA: ["COMARCA"],
+    PERFIL: ["PERFIL_SOLICITADO", "PERFIL"],
+    JUSTIFICATIVA: ["JUSTIFICATIVA"],
+    STATUS: ["STATUS"],
+    DATA: ["DATA_SOLICITACAO", "DATA"],
+    APROVADOR: ["APROVADOR"],
+    DATA_APROVACAO: ["DATA_APROVACAO"]
+  };
+
+  const indices = {};
+
+  (Array.isArray(linhaCabecalho) ? linhaCabecalho : []).forEach((cabecalho, i) => {
+    const chave = normalizarChave(cabecalho);
+
+    Object.keys(alvos).forEach(grupo => {
+      if (
+        indices[grupo] === undefined &&
+        alvos[grupo].some(nome => normalizarChave(nome) === chave)
+      ) {
+        indices[grupo] = i;
+      }
+    });
+  });
+
+  return indices;
+}
+
+/**
+ * Monta uma linha (array) para a aba SOLICITACOES_ACESSO
+ * respeitando as colunas existentes na planilha.
+ */
+function montarLinhaSolicitacao(indices, campos) {
+  const largura =
+    Object.keys(indices).reduce(
+      (maximo, grupo) => Math.max(maximo, indices[grupo] + 1),
+      0
+    );
+
+  const linha = new Array(largura).fill("");
+
+  Object.keys(campos).forEach(grupo => {
+    if (indices[grupo] !== undefined) {
+      linha[indices[grupo]] = campos[grupo];
+    }
+  });
+
+  return linha;
+}
+
 function listarSolicitacoes() {
   try {
     new AuthService().exigirPerfil(
@@ -379,22 +441,25 @@ function listarSolicitacoes() {
       return respostaSucesso([]);
     }
 
+    const indices = indicesSolicitacao(dados[0]);
+
     const result =
       dados
         .slice(1)
         .filter(row =>
-          String(row[5] || "")
+          String(row[indices.STATUS] || "")
             .trim()
             .toUpperCase() === "PENDENTE"
         )
         .map(row => ({
-          id: row[0],
-          email: row[1],
-          nome: row[2],
-          perfilSolicitado: row[3],
-          justificativa: row[4],
-          status: row[5],
-          data: row[6]
+          id: row[indices.ID],
+          email: row[indices.EMAIL],
+          nome: row[indices.NOME],
+          comarca: indices.COMARCA !== undefined ? row[indices.COMARCA] : "",
+          perfilSolicitado: row[indices.PERFIL],
+          justificativa: row[indices.JUSTIFICATIVA],
+          status: row[indices.STATUS],
+          data: row[indices.DATA]
         }));
 
     return respostaSucesso(result);
@@ -408,7 +473,14 @@ function listarSolicitacoes() {
   }
 }
 
-function solicitarAcesso(nome, perfil) {
+/**
+ * Solicitação de acesso (área administrativa).
+ *
+ * O solicitante precisa estar autenticado com conta
+ * institucional. Justificativa e comarca são opcionais
+ * para manter compatibilidade com chamadas antigas.
+ */
+function solicitarAcesso(nome, perfil, justificativa, comarca) {
   const lock =
     LockService.getScriptLock();
 
@@ -477,6 +549,30 @@ function solicitarAcesso(nome, perfil) {
       );
     }
 
+    const justificativaNormalizada =
+      textoSeguro(justificativa);
+
+    if (
+      justificativaNormalizada.length > 0 &&
+      justificativaNormalizada.length < 10
+    ) {
+      throw new Error(
+        "Descreva a justificativa (mínimo de 10 caracteres)."
+      );
+    }
+
+    if (
+      justificativaNormalizada.length >
+      CONFIG.LIMITES.TAMANHO_MAXIMO_OBSERVACAO
+    ) {
+      throw new Error(
+        "A justificativa é muito longa."
+      );
+    }
+
+    const comarcaNormalizada =
+      textoSeguro(comarca);
+
     const sheet =
       obterPlanilhaAPI().getSheetByName(
         CONFIG.SHEETS.SOLICITACOES_ACESSO
@@ -516,25 +612,30 @@ function solicitarAcesso(nome, perfil) {
       );
     }
 
+    const indices = indicesSolicitacao(dados[0] || []);
+
     const id = Utilities.getUuid();
 
-    sheet.appendRow([
-      id,
-      emailSolicitante,
-      nomeNormalizado,
-      perfilSolicitado,
-      "",
-      "PENDENTE",
-      new Date(),
-      "",
-      ""
-    ]);
+    const linha = montarLinhaSolicitacao(indices, {
+      ID: id,
+      EMAIL: emailSolicitante,
+      NOME: nomeNormalizado,
+      COMARCA: comarcaNormalizada,
+      PERFIL: perfilSolicitado,
+      JUSTIFICATIVA: justificativaNormalizada,
+      STATUS: "PENDENTE",
+      DATA: new Date()
+    });
+
+    sheet.appendRow(linha);
 
     try {
       notificarNovaSolicitacao(
         emailSolicitante,
         nomeNormalizado,
-        perfilSolicitado
+        perfilSolicitado,
+        comarcaNormalizada,
+        justificativaNormalizada
       );
     } catch (erroEmail) {
       registrarErroAPI(
@@ -558,11 +659,222 @@ function solicitarAcesso(nome, perfil) {
   }
 }
 
+/**
+ * Formulário público de acesso (aba "Formulário de Acesso").
+ *
+ * Qualquer visitante pode preencher: nome, comarca, e-mail,
+ * perfil solicitado e justificativa. Os dados são gravados na
+ * aba SOLICITACOES_ACESSO com status PENDENTE.
+ */
+function enviarFormularioAcesso(dados) {
+  const lock =
+    LockService.getScriptLock();
+
+  let bloqueado = false;
+
+  try {
+    lock.waitLock(30000);
+    bloqueado = true;
+
+    const entrada = ehObjeto(dados) ? dados : {};
+
+    const nome =
+      textoSeguro(
+        valorObjeto(entrada, "nome", "NOME")
+      );
+
+    const comarca =
+      textoSeguro(
+        valorObjeto(entrada, "comarca", "COMARCA")
+      );
+
+    const email =
+      normalizarEmail(
+        valorObjeto(entrada, "email", "EMAIL")
+      );
+
+    const perfilSolicitado =
+      String(
+        valorObjeto(entrada, "perfil", "perfilSolicitado", "PERFIL_SOLICITADO")
+          || ""
+      )
+        .trim()
+        .toUpperCase();
+
+    const justificativa =
+      textoSeguro(
+        valorObjeto(entrada, "justificativa", "JUSTIFICATIVA")
+      );
+
+    if (nome.length < 3) {
+      throw new Error(
+        "Informe o seu nome completo."
+      );
+    }
+
+    if (
+      nome.length >
+      CONFIG.LIMITES.TAMANHO_MAXIMO_NOME
+    ) {
+      throw new Error(
+        "O nome informado é muito grande."
+      );
+    }
+
+    if (comarca.length < 2) {
+      throw new Error(
+        "Informe a comarca em que você trabalha."
+      );
+    }
+
+    if (
+      comarca.length >
+      CONFIG.LIMITES.TAMANHO_MAXIMO_NOME
+    ) {
+      throw new Error(
+        "A comarca informada é muito grande."
+      );
+    }
+
+    if (!emailValidoAPI(email)) {
+      throw new Error(
+        "Informe um e-mail válido."
+      );
+    }
+
+    if (!emailInstitucional(email)) {
+      throw new Error(
+        "Somente e-mails institucionais (" +
+        CONFIG.AUTH.DOMINIO_INSTITUCIONAL +
+        ") podem solicitar acesso."
+      );
+    }
+
+    if (
+      perfilSolicitado !==
+      CONFIG.PERFIS.GESTOR_CONTEUDO
+    ) {
+      throw new Error(
+        "Perfil solicitado inválido."
+      );
+    }
+
+    if (justificativa.length < 10) {
+      throw new Error(
+        "Descreva a justificativa (mínimo de 10 caracteres)."
+      );
+    }
+
+    if (
+      justificativa.length >
+      CONFIG.LIMITES.TAMANHO_MAXIMO_OBSERVACAO
+    ) {
+      throw new Error(
+        "A justificativa é muito longa."
+      );
+    }
+
+    const sheet =
+      obterPlanilhaAPI().getSheetByName(
+        CONFIG.SHEETS.SOLICITACOES_ACESSO
+      );
+
+    if (!sheet) {
+      throw new Error(
+        "Aba SOLICITACOES_ACESSO não encontrada."
+      );
+    }
+
+    const dadosPlanilha =
+      sheet.getDataRange().getValues();
+
+    const indices = indicesSolicitacao(dadosPlanilha[0] || []);
+
+    if (indices.STATUS === undefined || indices.EMAIL === undefined) {
+      throw new Error(
+        "A aba SOLICITACOES_ACESSO não possui os cabeçalhos esperados. Execute instalarSistema()."
+      );
+    }
+
+    const existePendente =
+      dadosPlanilha.slice(1).some(row => {
+        const emailLinha =
+          normalizarEmail(row[indices.EMAIL]);
+
+        const statusLinha =
+          String(row[indices.STATUS] || "")
+            .trim()
+            .toUpperCase();
+
+        return (
+          emailLinha === email &&
+          statusLinha === "PENDENTE"
+        );
+      });
+
+    if (existePendente) {
+      throw new Error(
+        "Já existe uma solicitação pendente para este e-mail."
+      );
+    }
+
+    const id = Utilities.getUuid();
+
+    const linha = montarLinhaSolicitacao(indices, {
+      ID: id,
+      EMAIL: email,
+      NOME: nome,
+      COMARCA: comarca,
+      PERFIL: perfilSolicitado,
+      JUSTIFICATIVA: justificativa,
+      STATUS: "PENDENTE",
+      DATA: new Date()
+    });
+
+    sheet.appendRow(linha);
+
+    try {
+      notificarNovaSolicitacao(
+        email,
+        nome,
+        perfilSolicitado,
+        comarca,
+        justificativa
+      );
+    } catch (erroEmail) {
+      registrarErroAPI(
+        "NOTIFICAR_NOVA_SOLICITACAO",
+        erroEmail
+      );
+    }
+
+    registrarInfoAPI(
+      "FORMULARIO_ACESSO",
+      "Nova solicitação pelo formulário: " + email
+    );
+
+    return respostaSucesso({ id: id });
+  } catch (erro) {
+    registrarErroAPI(
+      "FORMULARIO_ACESSO",
+      erro
+    );
+
+    return respostaErro(erro);
+  } finally {
+    if (bloqueado) {
+      lock.releaseLock();
+    }
+  }
+}
+
 function localizarSolicitacaoAPI(sheet, id) {
   const idBusca = textoSeguro(id);
 
   const dados =
     sheet.getDataRange().getValues();
+
+  const indices = indicesSolicitacao(dados[0] || []);
 
   for (
     let i = 1;
@@ -570,18 +882,19 @@ function localizarSolicitacaoAPI(sheet, id) {
     i++
   ) {
     if (
-      textoSeguro(dados[i][0]) ===
+      textoSeguro(dados[i][indices.ID]) ===
       idBusca
     ) {
       return {
         linha: i + 1,
-        id: dados[i][0],
-        email: normalizarEmail(dados[i][1]),
-        nome: textoSeguro(dados[i][2]),
-        perfil: String(dados[i][3] || "")
+        id: dados[i][indices.ID],
+        email: normalizarEmail(dados[i][indices.EMAIL]),
+        nome: textoSeguro(dados[i][indices.NOME]),
+        comarca: indices.COMARCA !== undefined ? textoSeguro(dados[i][indices.COMARCA]) : "",
+        perfil: String(dados[i][indices.PERFIL] || "")
           .trim()
           .toUpperCase(),
-        status: String(dados[i][5] || "")
+        status: String(dados[i][indices.STATUS] || "")
           .trim()
           .toUpperCase()
       };
@@ -727,17 +1040,28 @@ function processarSolicitacaoAPI(id, novoStatus) {
     const aprovador =
       obterEmailSessaoAPI();
 
-    sheetSolic
-      .getRange(solicitacao.linha, 6)
-      .setValue(status);
+    const indices =
+      indicesSolicitacao(
+        sheetSolic.getRange(1, 1, 1, sheetSolic.getLastColumn()).getDisplayValues()[0]
+      );
 
-    sheetSolic
-      .getRange(solicitacao.linha, 8)
-      .setValue(aprovador);
+    if (indices.STATUS !== undefined) {
+      sheetSolic
+        .getRange(solicitacao.linha, indices.STATUS + 1)
+        .setValue(status);
+    }
 
-    sheetSolic
-      .getRange(solicitacao.linha, 9)
-      .setValue(new Date());
+    if (indices.APROVADOR !== undefined) {
+      sheetSolic
+        .getRange(solicitacao.linha, indices.APROVADOR + 1)
+        .setValue(aprovador);
+    }
+
+    if (indices.DATA_APROVACAO !== undefined) {
+      sheetSolic
+        .getRange(solicitacao.linha, indices.DATA_APROVACAO + 1)
+        .setValue(new Date());
+    }
 
     try {
       notificarDecisaoSolicitacao(
@@ -802,6 +1126,10 @@ function rejeitarSolicitacao(id) {
 
 function listarHistoricoGeral() {
   try {
+    new AuthService().exigirPermissao(
+      CONFIG.PERMISSOES.HISTORICO
+    );
+
     const service =
       new HistoryService();
 
@@ -1331,7 +1659,9 @@ function emailValidoAPI(email) {
 function notificarNovaSolicitacao(
   emailSolicitante,
   nomeSolicitante,
-  perfilSolicitado
+  perfilSolicitado,
+  comarca,
+  justificativa
 ) {
   const gestorEmail =
     obterConfiguracaoAPI(
@@ -1354,18 +1684,42 @@ function notificarNovaSolicitacao(
     "Nova solicitação de acesso - " +
     nomeSolicitante;
 
-  const corpo =
+  let corpo =
     "Foi recebida uma nova solicitação de acesso:\n\n" +
     "Nome: " +
     nomeSolicitante +
     "\n" +
     "E-mail: " +
     emailSolicitante +
-    "\n" +
+    "\n";
+
+  const comarcaTexto =
+    textoSeguro(comarca);
+
+  if (comarcaTexto) {
+    corpo +=
+      "Comarca: " +
+      comarcaTexto +
+      "\n";
+  }
+
+  corpo +=
     "Perfil solicitado: " +
     perfilSolicitado +
-    "\n\n" +
-    "Acesse a área administrativa:\n" +
+    "\n";
+
+  const justificativaTexto =
+    textoSeguro(justificativa);
+
+  if (justificativaTexto) {
+    corpo +=
+      "Justificativa: " +
+      justificativaTexto +
+      "\n";
+  }
+
+  corpo +=
+    "\nAcesse a área administrativa:\n" +
     obterUrlAdmin();
 
   adicionarEmailPendente(
