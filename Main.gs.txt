@@ -43,7 +43,7 @@ function doGet(e) {
 }
 
 function prepararTemplateAplicacao(template) {
-  template.urlSistema = CONFIG.WEB_APP.URL_PUBLICA;
+  template.urlSistema = obterUrlSistema();
   template.sistemaNome = CONFIG.SISTEMA.NOME;
   template.sistemaVersao = CONFIG.SISTEMA.VERSAO;
   return template;
@@ -162,6 +162,22 @@ function escaparHtmlServidor(valor) {
 }
 
 function obterUrlSistema() {
+  /*
+   * Usa a URL da implantação REAL que está servindo a requisição.
+   * Isso elimina o problema de URL antiga/removida no CONFIG:
+   * os e-mails e o botão de login sempre apontam para a implantação
+   * em uso, nunca para uma URL desatualizada.
+   */
+  try {
+    const urlServico = ScriptApp.getService().getUrl();
+
+    if (urlServico && /^https:\/\/script\.google\.com\/macros\/s\//.test(urlServico)) {
+      return urlServico;
+    }
+  } catch (erro) {
+    console.warn("Falha ao obter URL do serviço:", erro);
+  }
+
   const base = String(CONFIG.WEB_APP && CONFIG.WEB_APP.URL_PUBLICA ? CONFIG.WEB_APP.URL_PUBLICA : "").trim();
   if (!base) throw new Error("URL_PUBLICA não foi configurada no CONFIG.");
   if (base.includes("ID_PUBLICO")) {
@@ -189,7 +205,7 @@ function include(nomeArquivo) {
   const template = HtmlService.createTemplateFromFile(nome);
   template.sistemaNome = CONFIG.SISTEMA.NOME;
   template.sistemaVersao = CONFIG.SISTEMA.VERSAO;
-  template.urlSistema = CONFIG.WEB_APP.URL_PUBLICA;
+  template.urlSistema = obterUrlSistema();
   template.mostrarModalAcesso = false;
   return template.evaluate().getContent();
 }

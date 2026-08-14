@@ -173,6 +173,21 @@ function atualizarInterfaceUsuario() {
     }
   }
 
+  const configConta =
+    document.getElementById("config-conta-conectada");
+
+  if (configConta) {
+    var emailSessao2 = String(
+      (typeof window.SESSAO_EMAIL !== "undefined" && window.SESSAO_EMAIL) || ""
+    ).trim();
+
+    configConta.textContent = logado
+      ? email + " (" + formatarPerfil(perfil) + ")"
+      : emailSessao2
+        ? emailSessao2 + " (sem cargo)"
+        : "Nenhuma (acesso anônimo)";
+  }
+
   const btnAcesso =
     document.getElementById(
       "btn-status-acesso"
@@ -347,38 +362,14 @@ function formatarPerfil(perfil) {
 }
 
 /**
- * ----------------------------------------------------------
- * LOGIN / ADMINISTRAÇÃO
- * ----------------------------------------------------------
+ * "Entrar": recarrega a página atual.
  *
- * Versão única: o login é feito pela própria conta Google.
- * Quem possui cargo ativo (GESTOR_SISTEMA ou GESTOR_CONTEUDO)
- * na aba USUARIOS entra automaticamente ao abrir o sistema.
+ * Com a implantação "Qualquer pessoa com conta Google", o próprio
+ * Google pede a conta ao carregar o app — não precisamos navegar
+ * para URLs externas (que podiam estar desatualizadas no CONFIG).
  */
-
 function fazerLogin() {
-  const destino =
-    String(
-      window.URL_SISTEMA || ""
-    ).trim();
-
-  if (!destino) {
-    mostrarToast(
-      "URL do sistema não configurada.",
-      "error"
-    );
-    return;
-  }
-
-  const urlLogin =
-    "https://accounts.google.com/AccountChooser" +
-    "?continue=" +
-    encodeURIComponent(destino) +
-    "&flowName=GlifWebSignIn" +
-    "&flowEntry=AccountChooser";
-
-  window.top.location.href =
-    urlLogin;
+  window.top.location.reload();
 }
 
 /**
@@ -389,7 +380,7 @@ function fazerLogin() {
 function tratarCliqueAcesso() {
   const destino =
     String(
-      window.URL_SISTEMA || ""
+      window.location.href || ""
     ).trim();
 
   if (!destino) {
