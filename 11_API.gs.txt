@@ -2770,3 +2770,209 @@ function atualizarUsuario(email, dados) {
     }
   }
 }
+/**
+ * Cria um novo usuário na aba USUARIOS.
+ *
+ * Somente GESTOR_SISTEMA pode criar.
+ * Valida e-mail institucional (@tjes.jus.br), perfil,
+ * comarcas e verifica duplicidade.
+ */
+function criarUsuario(dados) {
+  const lock = LockService.getScriptLock();
+  let bloqueado = false;
+
+  try {
+    lock.waitLock(30000);
+    bloqueado = true;
+
+    const auth = new AuthService();
+    auth.exigirPerfil(CONFIG.PERFIS.GESTOR_SISTEMA);
+
+    const entrada = ehObjeto(dados) ? dados : {};
+
+    const emailBruto = textoSeguro(valorObjeto(entrada, "email", "EMAIL"));
+    const email = normalizarEmail(emailBruto);
+
+    if (!email) {
+      throw new Error("E-mail é obrigatório.");
+    }
+
+    if (!emailValidoAPI(email)) {
+      throw new Error("E-mail inválido.");
+    }
+
+    if (!emailInstitucional(email)) {
+      throw new Error("Somente e-mails institucionais (@tjes.jus.br) são permitidos.");
+    }
+
+    const nome = textoSeguro(valorObjeto(entrada, "nome", "NOME"));
+
+    if (nome && nome.length > CONFIG.LIMITES.TAMANHO_MAXIMO_NOME) {
+      throw new Error("Nome muito longo.");
+    }
+
+    const perfilBruto = String(valorObjeto(entrada, "perfil", "PERFIL") || "").trim().toUpperCase();
+    const perfil = perfilBruto || CONFIG.PERFIS.GESTOR_CONTEUDO;
+
+    const perfisValidos = [CONFIG.PERFIS.GESTOR_SISTEMA, CONFIG.PERFIS.GESTOR_CONTEUDO];
+
+    if (!perfisValidos.includes(perfil)) {
+      throw new Error("Perfil inválido. Use Gestor do Sistema ou Gestor de Conteúdo.");
+    }
+
+    const ativo = possuiCampo(entrada, "ativo", "ATIVO") ? paraBoolean(valorObjeto(entrada, "ativo", "ATIVO")) : true;
+
+    const comarcasBruto = valorObjeto(entrada, "comarcas", "COMARCAS");
+    const comarcasLista = parseComarcas(comarcasBruto);
+
+    if (perfil === CONFIG.PERFIS.GESTOR_CONTEUDO && comarcasLista.length > 0) {
+      if (comarcasLista.some(item => item.length > 150)) {
+        throw new Error("Nome de comarca muito longo.");
+      }
+    }
+
+    const comarcasSerial = perfil === CONFIG.PERFIS.GESTOR_SISTEMA ? "" : serializarComarcas(comarcasLista);
+
+    const sheet = DB.usuarios();
+    const mapa = DB.map(sheet);
+    const idxEmail = mapa.EMAIL;
+    const idxNome = mapa.NOME;
+    const idxPerfil = mapa.PERFIL;
+    const idxAtivo = mapa.ATIVO;
+    const idxComarcas = mapa.COMARCAS;
+
+    if (!idxEmail || !idxPerfil || !idxAtivo) {
+      throw new Error("Aba USUARIOS sem cabeçalhos esperados. Execute instalarSistema().");
+    }
+
+    const dadosSheet = sheet.getDataRange().getValues();
+
+    for (let i = 1; i < dadosSheet.length; i++) {
+      if (normalizarEmail(dadosSheet[i][idxEmail - 1]) === email) {
+        throw new Error("Já existe um usuário com este e-mail.");
+      }
+    }
+
+    const headers = DB.headers(sheet);
+    const novaLinha = new Array(headers.length).fill("");
+
+    if (idxEmail) novaLinha[idxEmail - 1] = email;
+    if (idxNome) novaLinha[idxNome - 1] = nome;
+    if (idxPerfil) novaLinha[idxPerfil - 1] = perfil;
+    if (idxAtivo) novaLinha[idxAtivo - 1] = ativo ? "SIM" : "NÃO";
+    if (idxComarcas !== undefined) novaLinha[idxComarcas - 1] = comarcasSerial;
+
+    sheet.appendRow(novaLinha);
+    SpreadsheetApp.flush();
+
+    registrarInfoAPI("CRIAR_USUARIO", email + " -> " + perfil + (ativo ? " (ativo)" : " (inativo)"));
+
+    return respostaSucesso({
+      email: email,
+      nome: nome,
+      perfil: perfil,
+      ativo: ativo,
+      comarcas: comarcasSerial
+    });
+  } catch (erro) {
+    registrarErroAPI("CRIAR_USUARIO", erro);
+    return respostaErro(erro);
+  } finally {
+    if (bloqueado) {
+      lock.releaseLock();
+    }
+  }
+}
+
+/**
+ * Exclui um usuário da aba USUARIOS (remoção física da linha).
+ *
+ * Somente GESTOR_SISTEMA. Proteções:
+ * - não pode excluir a própria conta;
+ * - não pode excluir o último gestor do sistema ativo.
+ */
+function excluirUsuario(email) {
+  const lock = LockService.getScriptLock();
+  let bloqueado = false;
+
+  try {
+    lock.waitLock(30000);
+    bloqueado = true;
+
+    const auth = new AuthService();
+    auth.exigirPerfil(CONFIG.PERFIS.GESTOR_SISTEMA);
+
+    const emailAlvo = normalizarEmail(email);
+
+    if (!emailAlvo) {
+      throw new Error("E-mail é obrigatório.");
+    }
+
+    const sessao = auth.usuarioAtual();
+
+    if (normalizarEmail(sessao.email) === emailAlvo) {
+      throw new Error("Você não pode remover a sua própria conta.");
+    }
+
+    const sheet = DB.usuarios();
+    const mapa = DB.map(sheet);
+    const idxEmail = mapa.EMAIL;
+    const idxPerfil = mapa.PERFIL;
+    const idxAtivo = mapa.ATIVO;
+
+    if (!idxEmail) {
+      throw new Error("Aba USUARIOS sem cabeçalho EMAIL.");
+    }
+
+    const dadosSheet = sheet.getDataRange().getValues();
+    let linhaEncontrada = -1;
+
+    for (let i = 1; i < dadosSheet.length; i++) {
+      if (normalizarEmail(dadosSheet[i][idxEmail - 1]) === emailAlvo) {
+        linhaEncontrada = i + 1;
+        break;
+      }
+    }
+
+    if (linhaEncontrada === -1) {
+      throw new Error("Usuário não encontrado na aba USUARIOS.");
+    }
+
+    const perfilAtual = String(dadosSheet[linhaEncontrada - 1][idxPerfil - 1] || "").trim().toUpperCase();
+    const ativoAtual = paraBoolean(dadosSheet[linhaEncontrada - 1][idxAtivo - 1]);
+
+    if (perfilAtual === CONFIG.PERFIS.GESTOR_SISTEMA && ativoAtual) {
+      let outrosGestores = 0;
+
+      for (let i = 1; i < dadosSheet.length; i++) {
+        if (i === linhaEncontrada - 1) continue;
+
+        const perfil = String(dadosSheet[i][idxPerfil - 1] || "").trim().toUpperCase();
+        const ativo = paraBoolean(dadosSheet[i][idxAtivo - 1]);
+
+        if (perfil === CONFIG.PERFIS.GESTOR_SISTEMA && ativo) {
+          outrosGestores++;
+        }
+      }
+
+      if (outrosGestores === 0) {
+        throw new Error("Não é possível remover o último gestor do sistema ativo.");
+      }
+    }
+
+    sheet.deleteRow(linhaEncontrada);
+    SpreadsheetApp.flush();
+
+    registrarInfoAPI("EXCLUIR_USUARIO", emailAlvo);
+
+    return respostaSucesso({ email: emailAlvo });
+  } catch (erro) {
+    registrarErroAPI("EXCLUIR_USUARIO", erro);
+    return respostaErro(erro);
+  } finally {
+    if (bloqueado) {
+      lock.releaseLock();
+    }
+  }
+}
+

@@ -7,6 +7,7 @@
  */
 
 var comarcasSelecao = [];
+var novoUsuarioSeletorComarcas = null;
 
 function normalizarComarcaKey(valor) {
   return String(valor || "")
@@ -34,7 +35,6 @@ function carregarUsuarios() {
         );
         return;
       }
-
       renderizarUsuarios(
         Array.isArray(resposta.dados) ? resposta.dados : []
       );
@@ -96,6 +96,7 @@ function comarcasDeTelefonesLocais() {
  * Seletor de comarcas (menu suspenso com busca + checkboxes).
  * Retorna { elemento, obterValor } — obterValor devolve as
  * comarcas selecionadas separadas por vírgula.
+ * Vazio significa todas as comarcas (sem restrição).
  */
 function criarSeletorComarcas(valorInicial) {
   var selecionadas = {};
@@ -117,8 +118,18 @@ function criarSeletorComarcas(valorInicial) {
   botao.type = "button";
   botao.className = "btn btn-secondary";
   botao.style.cssText =
-    "width:100%;padding:6px 8px;font-size:12px;text-align:left;" +
-    "white-space:nowrap;overflow:hidden;text-overflow:ellipsis;";
+    "width:100%;padding:7px 10px;font-size:12px;text-align:left;" +
+    "white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" +
+    "background:#ffffff;border:1px solid #cbd5e1;color:#334155;" +
+    "display:flex;align-items:center;justify-content:space-between;gap:6px;";
+
+  var botaoTexto = document.createElement("span");
+  botaoTexto.style.cssText = "overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;";
+  var botaoSeta = document.createElement("span");
+  botaoSeta.textContent = "▾";
+  botaoSeta.style.cssText = "color:#94a3b8;font-size:10px;flex:0 0 auto;";
+  botao.appendChild(botaoTexto);
+  botao.appendChild(botaoSeta);
 
   var painel = document.createElement("div");
   painel.className = "hidden";
@@ -126,7 +137,7 @@ function criarSeletorComarcas(valorInicial) {
     "position:absolute;top:calc(100% + 4px);left:0;right:0;z-index:60;" +
     "background:#ffffff;border:1.5px solid #cbd5e1;border-radius:10px;" +
     "box-shadow:0 12px 28px -10px rgba(15,23,42,0.25);padding:8px;" +
-    "max-height:280px;display:flex;flex-direction:column;";
+    "max-height:300px;display:flex;flex-direction:column;";
 
   var busca = document.createElement("input");
   busca.type = "search";
@@ -140,13 +151,14 @@ function criarSeletorComarcas(valorInicial) {
 
   var rodape = document.createElement("div");
   rodape.style.cssText =
-    "display:flex;justify-content:space-between;gap:8px;margin-top:8px;";
+    "display:flex;justify-content:space-between;gap:8px;margin-top:8px;" +
+    "border-top:1px solid #f1f5f9;padding-top:8px;";
 
   var btnLimpar = document.createElement("button");
   btnLimpar.type = "button";
-  btnLimpar.className = "btn btn-danger";
+  btnLimpar.className = "btn btn-secondary";
   btnLimpar.textContent = "Limpar";
-  btnLimpar.style.cssText = "padding:5px 10px;font-size:11px;";
+  btnLimpar.style.cssText = "padding:5px 10px;font-size:11px;background:#f8fafc;color:#475569;border:1px solid #e2e8f0;";
 
   var btnFechar = document.createElement("button");
   btnFechar.type = "button";
@@ -167,16 +179,19 @@ function criarSeletorComarcas(valorInicial) {
     var nomes = Object.keys(selecionadas).map(function(key) {
       return selecionadas[key];
     });
-
     if (nomes.length === 0) {
-      botao.textContent = "Todas as comarcas";
+      botaoTexto.textContent = "Todas as comarcas";
       botao.title = "Sem restrição — pode editar todas as comarcas";
+      botao.style.color = "#64748b";
+      botao.style.fontStyle = "italic";
     } else {
       var texto = nomes.join(", ");
-      botao.textContent =
+      botaoTexto.textContent =
         nomes.length + " comarca" + (nomes.length > 1 ? "s" : "") +
         (texto.length > 42 ? ": " + texto.slice(0, 39) + "…" : ": " + texto);
       botao.title = texto;
+      botao.style.color = "#1e293b";
+      botao.style.fontStyle = "normal";
     }
   }
 
@@ -187,7 +202,7 @@ function criarSeletorComarcas(valorInicial) {
       var aviso = document.createElement("div");
       aviso.style.cssText =
         "padding:10px;font-size:12px;color:#94a3b8;text-align:center;";
-      aviso.textContent = "Carregando comarcas...";
+      aviso.textContent = "Nenhuma comarca cadastrada";
       lista.appendChild(aviso);
       return;
     }
@@ -214,20 +229,19 @@ function criarSeletorComarcas(valorInicial) {
       label.style.cssText =
         "display:flex;align-items:center;gap:7px;padding:5px 6px;" +
         "border-radius:6px;font-size:12px;cursor:pointer;";
-
+      label.addEventListener("mouseenter", function(){ label.style.background = "#f8fafc"; });
+      label.addEventListener("mouseleave", function(){ label.style.background = "transparent"; });
       var checkbox = document.createElement("input");
       checkbox.type = "checkbox";
       checkbox.checked = !!selecionadas[normalizarComarcaKey(nome)];
 
       checkbox.addEventListener("change", function() {
         var chave = normalizarComarcaKey(nome);
-
         if (checkbox.checked) {
           selecionadas[chave] = nome;
         } else {
           delete selecionadas[chave];
         }
-
         atualizarBotao();
       });
 
@@ -254,6 +268,7 @@ function criarSeletorComarcas(valorInicial) {
     if (fechado) {
       renderizarLista();
       painel.classList.remove("hidden");
+      busca.focus();
     } else {
       painel.classList.add("hidden");
     }
@@ -334,8 +349,8 @@ function renderizarUsuarios(lista) {
   lista.forEach(function(usuario) {
     var tr = document.createElement("tr");
 
-    tr.appendChild(criarCelulaUsuario(usuario.email || "-"));
-    tr.appendChild(criarCelulaUsuario(usuario.nome || "-"));
+    tr.appendChild(criarCelulaUsuario(usuario.email || ""));
+    tr.appendChild(criarCelulaUsuario(usuario.nome || ""));
 
     var tdPerfil = criarCelulaUsuario("");
     var selectPerfil = document.createElement("select");
@@ -349,8 +364,7 @@ function renderizarUsuarios(lista) {
 
     var perfis = [
       { valor: "GESTOR_SISTEMA", rotulo: "Gestor do Sistema" },
-      { valor: "GESTOR_CONTEUDO", rotulo: "Gestor de Conteúdo" },
-      { valor: "USUARIO_CONSULTA", rotulo: "Visitante (remover acesso)" }
+      { valor: "GESTOR_CONTEUDO", rotulo: "Gestor de Conteúdo" }
     ];
 
     perfis.forEach(function(opcao) {
@@ -360,12 +374,11 @@ function renderizarUsuarios(lista) {
       selectPerfil.appendChild(option);
     });
 
+    var perfilAtual = String(usuario.perfil || "").toUpperCase();
     selectPerfil.value =
-      ["GESTOR_SISTEMA", "GESTOR_CONTEUDO", "USUARIO_CONSULTA"].includes(
-        String(usuario.perfil || "").toUpperCase()
-      )
-        ? String(usuario.perfil).toUpperCase()
-        : "USUARIO_CONSULTA";
+      ["GESTOR_SISTEMA", "GESTOR_CONTEUDO"].includes(perfilAtual)
+        ? perfilAtual
+        : "GESTOR_CONTEUDO";
 
     tdPerfil.appendChild(selectPerfil);
     tr.appendChild(tdPerfil);
@@ -395,7 +408,7 @@ function renderizarUsuarios(lista) {
     var botaoSalvar = document.createElement("button");
     botaoSalvar.type = "button";
     botaoSalvar.className = "btn btn-primary";
-    botaoSalvar.textContent = "💾 Salvar";
+    botaoSalvar.textContent = "Salvar";
     botaoSalvar.style.padding = "5px 12px";
     botaoSalvar.style.fontSize = "12px";
 
@@ -409,7 +422,20 @@ function renderizarUsuarios(lista) {
       );
     });
 
+    var botaoExcluir = document.createElement("button");
+    botaoExcluir.type = "button";
+    botaoExcluir.className = "btn btn-danger";
+    botaoExcluir.textContent = "Excluir";
+    botaoExcluir.style.padding = "5px 12px";
+    botaoExcluir.style.fontSize = "12px";
+    botaoExcluir.style.marginLeft = "6px";
+
+    botaoExcluir.addEventListener("click", function() {
+      excluirUsuario(usuario.email, botaoExcluir);
+    });
+
     tdAcoes.appendChild(botaoSalvar);
+    tdAcoes.appendChild(botaoExcluir);
     tr.appendChild(tdAcoes);
 
     tbody.appendChild(tr);
@@ -419,12 +445,12 @@ function renderizarUsuarios(lista) {
 function criarCelulaUsuario(valor) {
   var td = document.createElement("td");
 
-  td.textContent =
-    valor === null || valor === undefined || String(valor).trim() === ""
-      ? "-"
-      : String(valor);
-
+  var texto = String(valor === null || valor === undefined ? "" : valor).trim();
+  td.textContent = texto;
   td.style.fontSize = "13px";
+  if (!texto) {
+    td.style.color = "#94a3b8";
+  }
 
   return td;
 }
@@ -466,10 +492,6 @@ function salvarUsuario(email, perfil, ativo, comarcas, botao) {
 
       mostrarToast("Usuário atualizado com sucesso!", "success");
 
-      if (perfil === "USUARIO_CONSULTA") {
-        mostrarToast("Acesso removido — o usuário saiu da lista.", "info");
-      }
-
       carregarUsuarios();
     },
     function(erro) {
@@ -480,6 +502,188 @@ function salvarUsuario(email, perfil, ativo, comarcas, botao) {
         (erro && erro.message) || "Falha de comunicação com o servidor.",
         "error"
       );
+    }
+  );
+}
+
+function excluirUsuario(email, botao) {
+  if (!confirm("Remover o acesso de " + email + "?\n\nEsta ação exclui o usuário da lista e não pode ser desfeita.")) {
+    return;
+  }
+
+  var textoOriginal = botao ? botao.textContent : "";
+  if (botao) {
+    botao.disabled = true;
+    botao.textContent = "Excluindo...";
+  }
+
+  API.excluirUsuario(
+    email,
+    function(resposta) {
+      if (botao) {
+        botao.disabled = false;
+        botao.textContent = textoOriginal || "Excluir";
+      }
+      if (!resposta || resposta.sucesso !== true) {
+        mostrarToast((resposta && resposta.erro) || "Erro ao excluir usuário.", "error");
+        return;
+      }
+      mostrarToast("Usuário excluído com sucesso.", "success");
+      carregarUsuarios();
+    },
+    function(erro) {
+      if (botao) {
+        botao.disabled = false;
+        botao.textContent = textoOriginal || "Excluir";
+      }
+      mostrarToast((erro && erro.message) || "Falha de comunicação com o servidor.", "error");
+    }
+  );
+}
+
+// --- Modal Adicionar usuário ---
+
+function abrirModalAdicionarUsuario() {
+  var modal = document.getElementById("modal-adicionar-usuario");
+  if (!modal) return;
+
+  var emailInput = document.getElementById("novo-usuario-email");
+  var nomeInput = document.getElementById("novo-usuario-nome");
+  var perfilSelect = document.getElementById("novo-usuario-perfil");
+  var ativoCheck = document.getElementById("novo-usuario-ativo");
+  var erroDiv = document.getElementById("novo-usuario-erro");
+  var container = document.getElementById("novo-usuario-comarcas-container");
+
+  if (emailInput) emailInput.value = "";
+  if (nomeInput) nomeInput.value = "";
+  if (perfilSelect) perfilSelect.value = "GESTOR_CONTEUDO";
+  if (ativoCheck) ativoCheck.checked = true;
+  if (erroDiv) {
+    erroDiv.textContent = "";
+    erroDiv.classList.add("hidden");
+  }
+  if (container) {
+    container.textContent = "";
+    // garante comarcas carregadas
+    if (comarcasSelecao.length === 0) {
+      carregarComarcasParaSelecao();
+    }
+    novoUsuarioSeletorComarcas = criarSeletorComarcas("");
+    container.appendChild(novoUsuarioSeletorComarcas.elemento);
+  }
+
+  alternarComarcasNovoUsuario();
+
+  modal.classList.remove("hidden");
+  if (emailInput) emailInput.focus();
+}
+
+function fecharModalAdicionarUsuario() {
+  var modal = document.getElementById("modal-adicionar-usuario");
+  if (modal) modal.classList.add("hidden");
+  var erroDiv = document.getElementById("novo-usuario-erro");
+  if (erroDiv) {
+    erroDiv.textContent = "";
+    erroDiv.classList.add("hidden");
+  }
+}
+
+function alternarComarcasNovoUsuario() {
+  var perfil = document.getElementById("novo-usuario-perfil");
+  var grupo = document.getElementById("grupo-novo-usuario-comarcas");
+  if (!perfil || !grupo) return;
+  // Gestor do Sistema tem acesso a todas as comarcas; esconde o seletor para clareza
+  if (perfil.value === "GESTOR_SISTEMA") {
+    grupo.style.opacity = "0.5";
+    grupo.style.pointerEvents = "none";
+    grupo.title = "Gestor do Sistema tem acesso a todas as comarcas";
+  } else {
+    grupo.style.opacity = "1";
+    grupo.style.pointerEvents = "";
+    grupo.title = "";
+  }
+}
+
+function mostrarErroNovoUsuario(mensagem) {
+  var erroDiv = document.getElementById("novo-usuario-erro");
+  if (!erroDiv) return;
+  erroDiv.textContent = String(mensagem || "");
+  erroDiv.classList.remove("hidden");
+}
+
+function salvarNovoUsuario() {
+  var emailInput = document.getElementById("novo-usuario-email");
+  var nomeInput = document.getElementById("novo-usuario-nome");
+  var perfilSelect = document.getElementById("novo-usuario-perfil");
+  var ativoCheck = document.getElementById("novo-usuario-ativo");
+  var btn = document.getElementById("btn-salvar-novo-usuario");
+
+  var email = emailInput ? String(emailInput.value || "").trim() : "";
+  var nome = nomeInput ? String(nomeInput.value || "").trim() : "";
+  var perfil = perfilSelect ? String(perfilSelect.value || "").trim().toUpperCase() : "";
+  var ativo = ativoCheck ? !!ativoCheck.checked : true;
+  var comarcas = novoUsuarioSeletorComarcas ? novoUsuarioSeletorComarcas.obterValor() : "";
+
+  // validação local rápida
+  if (!email) {
+    mostrarErroNovoUsuario("Informe o e-mail do usuário.");
+    if (emailInput) emailInput.focus();
+    return;
+  }
+  if (!/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email)) {
+    mostrarErroNovoUsuario("Informe um e-mail válido.");
+    return;
+  }
+  if (!email.toLowerCase().endsWith("@tjes.jus.br")) {
+    mostrarErroNovoUsuario("Somente e-mails @tjes.jus.br são permitidos.");
+    return;
+  }
+  if (perfil !== "GESTOR_SISTEMA" && perfil !== "GESTOR_CONTEUDO") {
+    mostrarErroNovoUsuario("Selecione um perfil válido.");
+    return;
+  }
+  if (perfil === "GESTOR_SISTEMA") {
+    comarcas = "";
+  }
+
+  var erroDiv = document.getElementById("novo-usuario-erro");
+  if (erroDiv) {
+    erroDiv.textContent = "";
+    erroDiv.classList.add("hidden");
+  }
+
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = "Adicionando...";
+  }
+
+  API.criarUsuario(
+    {
+      email: email,
+      nome: nome,
+      perfil: perfil,
+      ativo: ativo,
+      comarcas: comarcas
+    },
+    function(resposta) {
+      if (btn) {
+        btn.disabled = false;
+        btn.textContent = "Adicionar";
+      }
+      if (!resposta || resposta.sucesso !== true) {
+        mostrarErroNovoUsuario((resposta && resposta.erro) || "Erro ao adicionar usuário.");
+        return;
+      }
+      mostrarToast("Usuário adicionado com sucesso!", "success");
+      fecharModalAdicionarUsuario();
+      carregarUsuarios();
+    },
+    function(erro) {
+      if (btn) {
+        btn.disabled = false;
+        btn.textContent = "Adicionar";
+      }
+      mostrarErroNovoUsuario((erro && erro.message) || "Falha de comunicação com o servidor.");
     }
   );
 }

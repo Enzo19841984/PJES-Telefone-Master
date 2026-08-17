@@ -104,6 +104,16 @@ const API = {
       .atualizarUsuario(email, dados);
   },
 
+  criarUsuario(dados, sucesso, erro) {
+    criarRunnerAPI(sucesso, erro)
+      .criarUsuario(dados);
+  },
+
+  excluirUsuario(email, sucesso, erro) {
+    criarRunnerAPI(sucesso, erro)
+      .excluirUsuario(email);
+  },
+
   logout(sucesso, erro) {
     criarRunnerAPI(sucesso, erro)
       .encerrarSessao();

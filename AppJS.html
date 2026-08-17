@@ -245,11 +245,86 @@ function atualizarInterfaceUsuario() {
     ).trim();
 
     configConta.textContent = logado
-      ? email + " (" + formatarPerfil(perfil) + ")"
+      ? email
       : emailSessao2
-        ? emailSessao2 + " (sem cargo)"
-        : "Nenhuma (acesso anônimo)";
+        ? emailSessao2
+        : "Nenhuma (acesso an\u00f4nimo)";
   }
+
+  // --- Config premium: perfil, badge e comarcas ---
+  try {
+    var configPerfilEl = document.getElementById("config-conta-perfil");
+    if (configPerfilEl) {
+      if (logado) {
+        configPerfilEl.textContent = formatarPerfil(perfil);
+      } else {
+        var emailSessaoP = String(
+          (typeof window.SESSAO_EMAIL !== "undefined" && window.SESSAO_EMAIL) || ""
+        ).trim();
+        configPerfilEl.textContent = emailSessaoP
+          ? "Sem cargo administrativo"
+          : "Acesso an\u00f4nimo \u2014 consulta liberada";
+      }
+    }
+
+    var configBadge = document.getElementById("config-conta-badge");
+    if (configBadge) {
+      var badgeTexto = "visitante";
+      var badgeClasse = "config-conta-badge--visitante";
+      if (logado && perfil === "GESTOR_SISTEMA") {
+        badgeTexto = "Gestor do Sistema";
+        badgeClasse = "config-conta-badge--sistema";
+      } else if (logado && perfil === "GESTOR_CONTEUDO") {
+        badgeTexto = "Gestor de Conte\u00fado";
+        badgeClasse = "config-conta-badge--conteudo";
+      } else if (logado) {
+        badgeTexto = formatarPerfil(perfil);
+        badgeClasse = "config-conta-badge--visitante";
+      } else {
+        var es = String(
+          (typeof window.SESSAO_EMAIL !== "undefined" && window.SESSAO_EMAIL) || ""
+        ).trim();
+        badgeTexto = es ? "sem cargo" : "visitante";
+        badgeClasse = "config-conta-badge--visitante";
+      }
+      configBadge.textContent = badgeTexto;
+      configBadge.className = "config-conta-badge " + badgeClasse;
+    }
+
+    var comarcasWrap = document.getElementById("config-conta-comarcas-wrap");
+    var comarcasList = document.getElementById("config-conta-comarcas");
+    if (comarcasWrap && comarcasList) {
+      var comarcasUsuario = Array.isArray(usuario.comarcas) ? usuario.comarcas : [];
+      // Fallback: se usuarioAtual tiver comarcas em window
+      if (!comarcasUsuario.length && Array.isArray(usuarioAtual.comarcas)) {
+        comarcasUsuario = usuarioAtual.comarcas;
+      }
+      comarcasList.innerHTML = "";
+      if (logado && perfil === "GESTOR_SISTEMA") {
+        var chipAll = document.createElement("span");
+        chipAll.className = "config-comarca-chip config-comarca-chip--all";
+        chipAll.textContent = "Todas as comarcas";
+        comarcasList.appendChild(chipAll);
+        comarcasWrap.classList.remove("hidden");
+      } else if (logado && perfil === "GESTOR_CONTEUDO" && comarcasUsuario.length) {
+        comarcasUsuario.forEach(function(c){
+          var chip = document.createElement("span");
+          chip.className = "config-comarca-chip";
+          chip.textContent = String(c);
+          comarcasList.appendChild(chip);
+        });
+        comarcasWrap.classList.remove("hidden");
+      } else if (logado && perfil === "GESTOR_CONTEUDO") {
+        var chipTodas = document.createElement("span");
+        chipTodas.className = "config-comarca-chip config-comarca-chip--all";
+        chipTodas.textContent = "Todas as comarcas";
+        comarcasList.appendChild(chipTodas);
+        comarcasWrap.classList.remove("hidden");
+      } else {
+        comarcasWrap.classList.add("hidden");
+      }
+    }
+  } catch (ePrem) {}
 
   const btnAcesso =
     document.getElementById(
@@ -347,6 +422,39 @@ function atualizarInterfaceUsuario() {
     }
   }
 
+  // --- Visibilidade por perfil ---
+  // Usuário de Consulta: Dashboard oculto; Registro visível (adicionado).
+  // Gestor de Conteúdo: como está.
+  // Gestor de Sistema: todas menos Formulário de Acesso.
+
+  const ehGestorSistema = logado && perfil === "GESTOR_SISTEMA";
+  const ehGestorConteudo = logado && perfil === "GESTOR_CONTEUDO";
+  const ehVisitante = !logado || perfil === "USUARIO_CONSULTA";
+
+  const menuDashboard = document.getElementById("menu-dashboard");
+  if (menuDashboard) {
+    // Dashboard somente para admins (Gestor Sistema / Conteúdo)
+    menuDashboard.classList.toggle("hidden", ehVisitante);
+  }
+
+  const menuFormulario = document.getElementById("menu-formulario");
+  if (menuFormulario) {
+    // Formulário somente para visitantes / quem quer pedir acesso.
+    // Gestor do Sistema não vê.
+    menuFormulario.classList.toggle("hidden", ehGestorSistema);
+  }
+
+  const menuTelefones = document.getElementById("menu-telefones");
+  if (menuTelefones) {
+    // Telefones sempre visível (todos consultam); admin vê com edição
+    menuTelefones.classList.remove("hidden");
+  }
+
+  const menuManual = document.getElementById("menu-manual");
+  if (menuManual) {
+    menuManual.classList.remove("hidden");
+  }
+
   const menuSolicitacoes =
     document.getElementById(
       "menu-solicitacoes"
@@ -355,8 +463,7 @@ function atualizarInterfaceUsuario() {
   if (menuSolicitacoes) {
     menuSolicitacoes.classList.toggle(
       "hidden",
-      !logado ||
-        perfil !== "GESTOR_SISTEMA"
+      !ehGestorSistema
     );
   }
 
@@ -366,11 +473,8 @@ function atualizarInterfaceUsuario() {
     );
 
   if (menuAlteracoes) {
-    menuAlteracoes.classList.toggle(
-      "hidden",
-      !logado ||
-        perfil === "USUARIO_CONSULTA"
-    );
+    // Registro de Alterações: agora também para Usuário de Consulta
+    menuAlteracoes.classList.remove("hidden");
   }
 
   const menuUsuarios =
@@ -381,8 +485,7 @@ function atualizarInterfaceUsuario() {
   if (menuUsuarios) {
     menuUsuarios.classList.toggle(
       "hidden",
-      !logado ||
-        perfil !== "GESTOR_SISTEMA"
+      !ehGestorSistema
     );
   }
 
@@ -398,6 +501,31 @@ function atualizarInterfaceUsuario() {
         ? ""
         : "none";
   }
+
+  // Hint de escopo na aba Telefones (gestor de conteúdo limitado)
+  try {
+    var subtitulo = document.getElementById("telefones-subtitulo");
+    var escopoInfo = document.getElementById("telefones-escopo-info");
+
+    if (subtitulo && escopoInfo) {
+      if (logado && perfil === "GESTOR_CONTEUDO" && Array.isArray(usuario.comarcas) && usuario.comarcas.length > 0) {
+        subtitulo.textContent = "Gerenciamento de telefones — suas comarcas: " + usuario.comarcas.join(", ");
+        escopoInfo.textContent = "Você só pode adicionar/editar/excluir contatos das comarcas acima. Outras comarcas aparecem com 🔒 Solicitar acesso.";
+        escopoInfo.style.display = "block";
+      } else if (logado && perfil === "GESTOR_CONTEUDO") {
+        subtitulo.textContent = "Gerenciamento de telefones do Poder Judiciário do Estado do Espírito Santo";
+        escopoInfo.textContent = "";
+        escopoInfo.style.display = "none";
+      } else if (logado && perfil === "GESTOR_SISTEMA") {
+        subtitulo.textContent = "Gerenciamento de telefones do Poder Judiciário do Estado do Espírito Santo";
+        escopoInfo.textContent = "Gestor do Sistema — acesso a todas as comarcas.";
+        escopoInfo.style.display = "block";
+      } else {
+        subtitulo.textContent = "Gerenciamento de telefones do Poder Judiciário do Estado do Espírito Santo";
+        escopoInfo.style.display = "none";
+      }
+    }
+  } catch (e) {}
 
   if (
     typeof listaTelefones !==
@@ -504,40 +632,78 @@ function fazerLogin() {
 }
 
 /**
- * "SAIR" no modelo de duas implantações: como o acesso é definido
- * pela conta Google ativa, sair significa trocar de conta.
+ * Navegação de Telefones por perfil.
+ * - Gestor (Sistema/Conteúdo) -> aba de Gerenciamento (tabela editável)
+ * - Visitante -> aba de Consulta (mapa + lista somente leitura)
+ */
+function navegarParaTelefones() {
+  var ehGestor =
+    typeof usuarioAtual !== "undefined" &&
+    usuarioAtual &&
+    usuarioAtual.logado === true &&
+    (usuarioAtual.perfil === "GESTOR_SISTEMA" || usuarioAtual.perfil === "GESTOR_CONTEUDO");
+
+  mostrarView(ehGestor ? "telefones-view" : "consulta-telefones-view");
+}
+
+/**
+ * "SAIR" — logout suave para Usuário de Consulta.
  *
- * continue usa a URL ADMINISTRATIVA canônica (nunca a URL do iframe
- * script.googleusercontent.com — o Google rejeita com erro 400).
+ * Antes fazia redirect para accounts.google.com/logout?continue=SCRIPT_URL,
+ * mas com implantação morta (404/403) o Google devolvia 403. Agora não navega:
+ * limpa a sessão no servidor (encerrarSessao) e localmente volta ao estado
+ * visitante, sem depender do continue=. O Google só volta a ser tocado via
+ * "Acesso Administrativo" -> AccountChooser quando o usuário quiser logar de novo.
  */
 function tratarCliqueAcesso() {
-  const destino =
-    String(
-      (typeof window.URL_ADMIN !== "undefined" && window.URL_ADMIN) || ""
-    ).trim() ||
-    String(
-      (typeof window.URL_SISTEMA !== "undefined" && window.URL_SISTEMA) || ""
-    ).trim();
-
-  if (!destino) {
-    mostrarToast(
-      "URL do sistema não configurada.",
-      "error"
-    );
-    return;
-  }
-
   if (
     !confirm(
-      "Deseja sair e trocar de conta Google?"
+      "Deseja sair e voltar ao modo visitante?"
     )
   ) {
     return;
   }
 
-  window.location.href =
-    "https://accounts.google.com/logout?continue=" +
-    encodeURIComponent(destino);
+  function finalizarSaidaLocal() {
+    usuarioAtual = usuarioVisitante();
+
+    try {
+      window.PERFIL_ADMIN = "";
+    } catch (erro) {}
+
+    try {
+      window.SESSAO_EMAIL = "";
+    } catch (erro) {}
+
+    atualizarInterfaceUsuario();
+
+    try {
+      mostrarView("consulta-telefones-view");
+    } catch (erro) {
+      try {
+        mostrarView("dashboard-view");
+      } catch (erro2) {}
+    }
+
+    mostrarToast("Você saiu do acesso administrativo.", "info");
+  }
+
+  if (
+    typeof API !== "undefined" &&
+    typeof API.logout === "function"
+  ) {
+    API.logout(
+      function() {
+        finalizarSaidaLocal();
+      },
+      function(erro) {
+        console.warn("logout falhou, saindo localmente", erro);
+        finalizarSaidaLocal();
+      }
+    );
+  } else {
+    finalizarSaidaLocal();
+  }
 }
 
 /**
@@ -547,6 +713,27 @@ function tratarCliqueAcesso() {
  */
 
 function mostrarView(viewId) {
+  // --- Bloqueio por perfil ---
+  try {
+    var p = (typeof usuarioAtual !== "undefined" && usuarioAtual) ? String(usuarioAtual.perfil || "USUARIO_CONSULTA") : "USUARIO_CONSULTA";
+    var logado = !!(typeof usuarioAtual !== "undefined" && usuarioAtual && usuarioAtual.logado === true);
+    var ehGestorSistema = logado && p === "GESTOR_SISTEMA";
+    var ehVisitante = !logado || p === "USUARIO_CONSULTA";
+
+    if (viewId === "dashboard-view" && ehVisitante) {
+      mostrarToast("Dashboard disponível apenas para Gestor do Sistema e Gestor de Conteúdo.", "warning");
+      viewId = "consulta-telefones-view";
+    }
+
+    if (viewId === "formulario-acesso-view" && ehGestorSistema) {
+      mostrarToast("Gestores não precisam solicitar acesso.", "info");
+      viewId = "dashboard-view";
+    }
+
+    // manual-view é livre para todos os perfis — sem bloqueio.
+
+  } catch (e) {}
+
   const views =
     document.querySelectorAll(
       ".view, [id$='-view']"
@@ -667,7 +854,45 @@ function alternarModoEscuro(ativo) {
     "darkMode",
     ativo ? "true" : "false"
   );
+
+  try {
+    var light = document.querySelector(".config-preview-light");
+    var dark = document.querySelector(".config-preview-dark");
+    if (light && dark) {
+      if (ativo) {
+        dark.style.outline = "2px solid #2563eb";
+        dark.style.outlineOffset = "1px";
+        light.style.outline = "none";
+      } else {
+        light.style.outline = "2px solid #2563eb";
+        light.style.outlineOffset = "1px";
+        dark.style.outline = "none";
+      }
+    }
+  } catch(e){}
 }
+// Sincroniza preview da aparencia ao carregar
+document.addEventListener("DOMContentLoaded", function() {
+  try {
+    var ativo = localStorage.getItem("darkMode") === "true";
+    var light = document.querySelector(".config-preview-light");
+    var dark = document.querySelector(".config-preview-dark");
+    if (light && dark) {
+      if (ativo) {
+        dark.style.outline = "2px solid #2563eb";
+        dark.style.outlineOffset = "1px";
+      } else {
+        light.style.outline = "2px solid #2563eb";
+        light.style.outlineOffset = "1px";
+      }
+      // Clique nos previews alterna o toggle
+      light.style.cursor = "pointer";
+      dark.style.cursor = "pointer";
+      light.addEventListener("click", function(){ var t=document.getElementById("toggle-dark-mode"); if(t){ t.checked=false; alternarModoEscuro(false); }});
+      dark.addEventListener("click", function(){ var t=document.getElementById("toggle-dark-mode"); if(t){ t.checked=true; alternarModoEscuro(true); }});
+    }
+  } catch(e){}
+});
 
 document.addEventListener(
   "DOMContentLoaded",
