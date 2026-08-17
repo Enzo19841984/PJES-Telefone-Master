@@ -473,8 +473,11 @@ function atualizarInterfaceUsuario() {
     );
 
   if (menuAlteracoes) {
-    // Registro de Alterações: agora também para Usuário de Consulta
-    menuAlteracoes.classList.remove("hidden");
+    // Registro de Alterações: somente para admins (Gestor Sistema / Conteúdo)
+    menuAlteracoes.classList.toggle(
+      "hidden",
+      ehVisitante
+    );
   }
 
   const menuUsuarios =
@@ -722,6 +725,11 @@ function mostrarView(viewId) {
     if (viewId === "formulario-acesso-view" && ehGestorSistema) {
       mostrarToast("Gestores não precisam solicitar acesso.", "info");
       viewId = "dashboard-view";
+    }
+
+    if (viewId === "registro-alteracoes-view" && ehVisitante) {
+      mostrarToast("Registro de Alterações disponível apenas para Gestores.", "warning");
+      viewId = "consulta-telefones-view";
     }
 
     // manual-view é livre para todos os perfis — sem bloqueio.
