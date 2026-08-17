@@ -325,7 +325,9 @@ function atualizarInterfaceUsuario() {
           fundo: "#fef3c7",
           borda: "#f59e0b",
           cor: "#92400e",
-          acao: abrirModalAcesso
+          acao: function() {
+            mostrarView("formulario-acesso-view");
+          }
         }
       );
     } else {
