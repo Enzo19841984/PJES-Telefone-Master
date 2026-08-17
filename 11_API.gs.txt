@@ -734,8 +734,8 @@ function solicitarAcesso(nome, perfil, justificativa, comarca) {
         .toUpperCase();
 
     if (
-      perfilSolicitado !==
-      CONFIG.PERFIS.GESTOR_CONTEUDO
+      perfilSolicitado !== CONFIG.PERFIS.GESTOR_CONTEUDO &&
+      perfilSolicitado !== CONFIG.PERFIS.GESTOR_SISTEMA
     ) {
       throw new Error(
         "Perfil solicitado inválido."
@@ -944,8 +944,8 @@ function enviarFormularioAcesso(dados) {
     }
 
     if (
-      perfilSolicitado !==
-      CONFIG.PERFIS.GESTOR_CONTEUDO
+      perfilSolicitado !== CONFIG.PERFIS.GESTOR_CONTEUDO &&
+      perfilSolicitado !== CONFIG.PERFIS.GESTOR_SISTEMA
     ) {
       throw new Error(
         "Perfil solicitado inválido."
@@ -1160,8 +1160,8 @@ function processarSolicitacaoAPI(id, novoStatus) {
     }
 
     if (
-      solicitacao.perfil !==
-      CONFIG.PERFIS.GESTOR_CONTEUDO
+      solicitacao.perfil !== CONFIG.PERFIS.GESTOR_CONTEUDO &&
+      solicitacao.perfil !== CONFIG.PERFIS.GESTOR_SISTEMA
     ) {
       throw new Error(
         "O perfil solicitado é inválido."
@@ -1180,49 +1180,100 @@ function processarSolicitacaoAPI(id, novoStatus) {
         );
       }
 
-      const usuarios =
-        sheetUsuarios.getDataRange().getValues();
+      const mapaU = DB.map(sheetUsuarios);
+      const idxEmailU = mapaU.EMAIL;
+      const idxNomeU = mapaU.NOME;
+      const idxPerfilU = mapaU.PERFIL;
+      const idxAtivoU = mapaU.ATIVO;
+      const idxComarcasU = mapaU.COMARCAS;
+
+      const dadosU = sheetUsuarios.getDataRange().getValues();
+      const perfilSolicitadoNorm = String(solicitacao.perfil || "").trim().toUpperCase();
+      const comarcasSolicitadasRaw = String(solicitacao.comarca || "").trim();
+      const comarcasSolicitadasLista = comarcasSolicitadasRaw
+        ? comarcasSolicitadasRaw.split(/[,;|]+/).map(function(s){ return String(s||"").trim(); }).filter(Boolean)
+        : [];
 
       let usuarioExiste = false;
+      let linhaUsuario = -1;
 
-      for (
-        let i = 1;
-        i < usuarios.length;
-        i++
-      ) {
-        const emailUsuario =
-          normalizarEmail(usuarios[i][0]);
-
-        if (
-          emailUsuario ===
-          solicitacao.email
-        ) {
-          sheetUsuarios
-            .getRange(i + 1, 2)
-            .setValue(solicitacao.nome);
-
-          sheetUsuarios
-            .getRange(i + 1, 3)
-            .setValue(
-              CONFIG.PERFIS.GESTOR_CONTEUDO
-            );
-
-          sheetUsuarios
-            .getRange(i + 1, 4)
-            .setValue("SIM");
-
+      for (let i = 1; i < dadosU.length; i++) {
+        const emailUsuario = idxEmailU !== undefined ? normalizarEmail(dadosU[i][idxEmailU - 1]) : normalizarEmail(dadosU[i][0]);
+        if (emailUsuario === solicitacao.email) {
+          linhaUsuario = i + 1;
           usuarioExiste = true;
           break;
         }
       }
 
-      if (!usuarioExiste) {
-        sheetUsuarios.appendRow([
-          solicitacao.email,
-          solicitacao.nome,
-          CONFIG.PERFIS.GESTOR_CONTEUDO,
-          "SIM"
-        ]);
+      if (usuarioExiste) {
+        // Nome
+        if (idxNomeU !== undefined) sheetUsuarios.getRange(linhaUsuario, idxNomeU).setValue(solicitacao.nome);
+        else sheetUsuarios.getRange(linhaUsuario, 2).setValue(solicitacao.nome);
+
+        // Perfil + comarcas + ativo
+        if (perfilSolicitadoNorm === CONFIG.PERFIS.GESTOR_SISTEMA) {
+          if (idxPerfilU !== undefined) sheetUsuarios.getRange(linhaUsuario, idxPerfilU).setValue(CONFIG.PERFIS.GESTOR_SISTEMA);
+          else sheetUsuarios.getRange(linhaUsuario, 3).setValue(CONFIG.PERFIS.GESTOR_SISTEMA);
+          if (idxAtivoU !== undefined) sheetUsuarios.getRange(linhaUsuario, idxAtivoU).setValue("SIM");
+          else sheetUsuarios.getRange(linhaUsuario, 4).setValue("SIM");
+          // Sistema = todas -> limpa COMARCAS
+          if (idxComarcasU !== undefined) sheetUsuarios.getRange(linhaUsuario, idxComarcasU).setValue("");
+        } else {
+          // Gestor de Conteúdo: mescla comarcas existentes + solicitadas
+          if (idxPerfilU !== undefined) sheetUsuarios.getRange(linhaUsuario, idxPerfilU).setValue(CONFIG.PERFIS.GESTOR_CONTEUDO);
+          else sheetUsuarios.getRange(linhaUsuario, 3).setValue(CONFIG.PERFIS.GESTOR_CONTEUDO);
+          if (idxAtivoU !== undefined) sheetUsuarios.getRange(linhaUsuario, idxAtivoU).setValue("SIM");
+          else sheetUsuarios.getRange(linhaUsuario, 4).setValue("SIM");
+
+          if (idxComarcasU !== undefined) {
+            const existenteRaw = String(dadosU[linhaUsuario - 1][idxComarcasU - 1] || "").trim();
+            const existenteLista = existenteRaw ? existenteRaw.split(/[,;|]+/).map(function(s){ return String(s||"").trim(); }).filter(Boolean) : [];
+            const mergedMap = {};
+            existenteLista.forEach(function(c){ mergedMap[normalizarChave(c)] = c; });
+            comarcasSolicitadasLista.forEach(function(c){ var k = normalizarChave(c); if (!mergedMap[k]) mergedMap[k] = c; });
+            const merged = Object.keys(mergedMap).map(function(k){ return mergedMap[k]; });
+            // Se já tinha vazio (=todas), manter vazio não faz sentido ao adicionar — merged será as solicitadas
+            // Se existente era vazio (todas) e agora pede conteudo com lista, vira lista
+            const valorComarcas = merged.length ? merged.join(", ") : "";
+            sheetUsuarios.getRange(linhaUsuario, idxComarcasU).setValue(valorComarcas);
+          }
+        }
+      } else {
+        // Novo usuário
+        if (perfilSolicitadoNorm === CONFIG.PERFIS.GESTOR_SISTEMA) {
+          const linhaNovaSistema = [];
+          // Monta via mapa para respeitar ordem das colunas
+          const headersU = DB.headers(sheetUsuarios);
+          const widthU = headersU.length;
+          for (let c = 0; c < widthU; c++) linhaNovaSistema.push("");
+          if (idxEmailU !== undefined) linhaNovaSistema[idxEmailU - 1] = solicitacao.email;
+          if (idxNomeU !== undefined) linhaNovaSistema[idxNomeU - 1] = solicitacao.nome;
+          if (idxPerfilU !== undefined) linhaNovaSistema[idxPerfilU - 1] = CONFIG.PERFIS.GESTOR_SISTEMA;
+          if (idxAtivoU !== undefined) linhaNovaSistema[idxAtivoU - 1] = "SIM";
+          if (idxComarcasU !== undefined) linhaNovaSistema[idxComarcasU - 1] = "";
+          // fallback se mapa incompleto
+          if (linhaNovaSistema.every(function(v){ return !v; })) {
+            sheetUsuarios.appendRow([solicitacao.email, solicitacao.nome, CONFIG.PERFIS.GESTOR_SISTEMA, "SIM"]);
+          } else {
+            sheetUsuarios.appendRow(linhaNovaSistema);
+          }
+        } else {
+          const comarcasValor = comarcasSolicitadasLista.join(", ");
+          const headersU2 = DB.headers(sheetUsuarios);
+          const widthU2 = headersU2.length;
+          const linhaNovaConteudo = new Array(widthU2).fill("");
+          if (idxEmailU !== undefined) linhaNovaConteudo[idxEmailU - 1] = solicitacao.email;
+          if (idxNomeU !== undefined) linhaNovaConteudo[idxNomeU - 1] = solicitacao.nome;
+          if (idxPerfilU !== undefined) linhaNovaConteudo[idxPerfilU - 1] = CONFIG.PERFIS.GESTOR_CONTEUDO;
+          if (idxAtivoU !== undefined) linhaNovaConteudo[idxAtivoU - 1] = "SIM";
+          if (idxComarcasU !== undefined) linhaNovaConteudo[idxComarcasU - 1] = comarcasValor;
+          if (linhaNovaConteudo.every(function(v){ return !v; })) {
+            sheetUsuarios.appendRow([solicitacao.email, solicitacao.nome, CONFIG.PERFIS.GESTOR_CONTEUDO, "SIM", comarcasValor]);
+          } else {
+            sheetUsuarios.appendRow(linhaNovaConteudo);
+          }
+        }
       }
     }
 

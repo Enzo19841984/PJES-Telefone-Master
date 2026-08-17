@@ -244,6 +244,40 @@ Arquivo: FormularioAcesso.html
     line-height: 1.5;
   }
 
+  /* ---- Multi picker de comarcas (Formulário) ---- */
+  .fa-comarcas-picker{position:relative;}
+  .fa-comarcas-btn{
+    width:100%;display:flex;align-items:center;justify-content:space-between;gap:8px;
+    padding:11px 13px;border:1.5px solid #cbd5e1;border-radius:10px;background:#f8fafc;
+    font-size:14px;color:#0f172a;cursor:pointer;transition:border-color .15s, box-shadow .15s, background .15s;
+    text-align:left;
+  }
+  .fa-comarcas-btn:hover{border-color:#94a3b8;background:#ffffff;}
+  .fa-comarcas-btn:focus{outline:none;border-color:#2563eb;background:#ffffff;box-shadow:0 0 0 3px rgba(37,99,235,.15);}
+  .fa-comarcas-btn-text{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .fa-comarcas-btn-text.vazio{color:#64748b;font-style:italic;}
+  .fa-comarcas-btn-seta{color:#94a3b8;font-size:11px;flex:0 0 auto;}
+  .fa-comarcas-painel{
+    position:absolute;top:calc(100% + 6px);left:0;right:0;z-index:40;
+    background:#ffffff;border:1.5px solid #cbd5e1;border-radius:12px;
+    box-shadow:0 12px 28px -10px rgba(15,23,42,.25);padding:8px;
+    max-height:320px;display:flex;flex-direction:column;
+  }
+  .fa-comarcas-busca{
+    padding:8px 10px;border:1px solid #cbd5e1;border-radius:8px;font-size:13px;margin-bottom:6px;box-sizing:border-box;width:100%;
+  }
+  .fa-comarcas-lista{overflow-y:auto;flex:1;min-height:60px;}
+  .fa-comarcas-lista label{
+    display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:8px;font-size:13px;cursor:pointer;
+  }
+  .fa-comarcas-lista label:hover{background:#f8fafc;}
+  .fa-comarcas-rodape{
+    display:flex;justify-content:space-between;gap:8px;margin-top:8px;border-top:1px solid #f1f5f9;padding-top:8px;
+  }
+  .fa-nome-bloqueado{
+    background:#f1f5f9 !important;color:#475569 !important;cursor:not-allowed !important;
+  }
+
   @media (max-width: 640px) {
     .fa-grid {
       grid-template-columns: 1fr;
@@ -263,9 +297,8 @@ Arquivo: FormularioAcesso.html
     <div class="fa-head">
       <h2>🔑 Solicitação de Acesso</h2>
       <p>
-        Preencha os dados abaixo para solicitar o perfil de
-        <strong>Gestor de Conteúdo</strong>. A solicitação será encaminhada
-        ao Gestor do Sistema para aprovação.
+        Solicite acesso como <strong>Gestor de Conteúdo</strong> (comarcas específicas) ou
+        <strong>Gestor do Sistema</strong> (acesso total). Já é Gestor de Conteúdo? Use aqui para pedir mais comarcas ou promoção.
       </p>
     </div>
 
@@ -279,14 +312,10 @@ Arquivo: FormularioAcesso.html
         </div>
 
         <div class="fa-field">
-          <label for="acesso-comarca"><span class="fa-ic">🏛️</span> Comarca onde trabalha *</label>
-          <div class="fa-combobox" id="combobox-comarca">
-            <input type="text" id="acesso-comarca" maxlength="150" autocomplete="off" placeholder="Digite para buscar a comarca..." required>
-            <span class="fa-combobox-seta" aria-hidden="true">▼</span>
-            <ul class="fa-combobox-lista hidden" id="lista-comarcas-combobox" role="listbox" aria-label="Comarcas"></ul>
-          </div>
+          <label><span class="fa-ic">🏛️</span> Comarcas onde trabalha *</label>
+          <div id="fa-comarcas-picker"></div>
           <input type="hidden" id="acesso-comarca-valor">
-          <span class="fa-hint">Digite parte do nome e selecione a comarca correta na lista.</span>
+          <span class="fa-hint">Selecione uma ou mais comarcas. Use a busca para filtrar.</span>
         </div>
 
         <div class="fa-field fa-full">
@@ -298,8 +327,10 @@ Arquivo: FormularioAcesso.html
         <div class="fa-field fa-full">
           <label for="acesso-perfil"><span class="fa-ic">🎖️</span> Perfil solicitado *</label>
           <select id="acesso-perfil" required>
-            <option value="GESTOR_CONTEUDO">Gestor de Conteúdo — edita telefones do sistema</option>
+            <option value="GESTOR_CONTEUDO">Gestor de Conteúdo — edita telefones das comarcas selecionadas</option>
+            <option value="GESTOR_SISTEMA">Gestor do Sistema — acesso total (promoção)</option>
           </select>
+          <span class="fa-hint" id="perfil-hint" style="display:block;margin-top:6px;"></span>
         </div>
 
         <div class="fa-field fa-full">
@@ -335,12 +366,18 @@ Arquivo: FormularioAcesso.html
 <script>
 /**
  * ==========================================================
- * COMBOBOX DE COMARCAS (busca + seleção)
+ * FORMULÁRIO DE ACESSO — Multi comarcas + perfil ambos + nome bloqueado
  * ==========================================================
+ *
+ * - Visitante: preenche tudo.
+ * - Gestor de Conteúdo (logado): nome e email vêm de usuarioAtual (nome bloqueado),
+ *   pode pedir Gestor de Conteúdo (+ comarcas) OU Gestor do Sistema (promoção).
+ * - Comarcas: multi seleção via checkboxes, vazio não existe mais — ao menos 1.
  */
 
 var comarcasFormulario = [];
-var indiceAtivoCombobox = -1;
+var faComarcasSelecionadas = {};
+var faPerfilHintTimer = null;
 
 function normalizarComarca(valor) {
   return String(valor || "")
@@ -350,11 +387,15 @@ function normalizarComarca(valor) {
     .toLowerCase();
 }
 
+function ehGestorConteudoLogado() {
+  try {
+    return typeof usuarioAtual !== "undefined" && usuarioAtual && usuarioAtual.logado === true && String(usuarioAtual.perfil||"").toUpperCase() === "GESTOR_CONTEUDO";
+  } catch(e){ return false; }
+}
+
 function carregarComarcasCombobox() {
   function usarLista(lista) {
     comarcasFormulario = Array.isArray(lista) ? lista : [];
-
-    /* Mantém o datalist do modal (quando presente). */
     var datalistModal = document.getElementById("lista-comarcas-modal");
     if (datalistModal) {
       datalistModal.textContent = "";
@@ -364,12 +405,10 @@ function carregarComarcasCombobox() {
         datalistModal.appendChild(option);
       });
     }
+    construirPickerComarcas();
   }
 
-  if (
-    typeof API !== "undefined" &&
-    typeof API.listarComarcas === "function"
-  ) {
+  if (typeof API !== "undefined" && typeof API.listarComarcas === "function") {
     API.listarComarcas(
       function(resposta) {
         if (resposta && resposta.sucesso === true && Array.isArray(resposta.dados)) {
@@ -378,9 +417,7 @@ function carregarComarcasCombobox() {
           usarLista(comarcasDeTelefonesLocais());
         }
       },
-      function() {
-        usarLista(comarcasDeTelefonesLocais());
-      }
+      function() { usarLista(comarcasDeTelefonesLocais()); }
     );
   } else {
     usarLista(comarcasDeTelefonesLocais());
@@ -389,217 +426,219 @@ function carregarComarcasCombobox() {
 
 function comarcasDeTelefonesLocais() {
   var comarcas = {};
-
-  if (
-    typeof listaTelefones !== "undefined" &&
-    Array.isArray(listaTelefones)
-  ) {
+  if (typeof listaTelefones !== "undefined" && Array.isArray(listaTelefones)) {
     listaTelefones.forEach(function(item) {
-      var comarca = String(
-        (item && (item.comarca || item.COMARCA)) || ""
-      ).trim();
-
-      if (comarca && !comarcas[comarca]) {
-        comarcas[comarca] = true;
-      }
+      var comarca = String((item && (item.comarca || item.COMARCA)) || "").trim();
+      if (comarca && !comarcas[comarca]) comarcas[comarca] = true;
     });
   }
-
-  return Object.keys(comarcas).sort(function(a, b) {
-    return a.localeCompare(b, "pt-BR");
-  });
+  return Object.keys(comarcas).sort(function(a, b) { return a.localeCompare(b, "pt-BR"); });
 }
 
-function obterCampoComarca() {
-  return document.getElementById("acesso-comarca");
-}
+// ---- Picker multi comarcas ----
 
-function obterListaCombobox() {
-  return document.getElementById("lista-comarcas-combobox");
-}
+function construirPickerComarcas() {
+  var holder = document.getElementById("fa-comarcas-picker");
+  if (!holder) return;
+  holder.textContent = "";
 
-function obterWrapperCombobox() {
-  return document.getElementById("combobox-comarca");
-}
+  var wrapper = document.createElement("div");
+  wrapper.className = "fa-comarcas-picker";
+  wrapper.style.position = "relative";
 
-function abrirComboboxComarca() {
-  var lista = obterListaCombobox();
-  var wrapper = obterWrapperCombobox();
+  var btn = document.createElement("button");
+  btn.type = "button";
+  btn.id = "fa-comarcas-btn";
+  btn.className = "fa-comarcas-btn";
+  var btnText = document.createElement("span");
+  btnText.id = "fa-comarcas-btn-text";
+  btnText.className = "fa-comarcas-btn-text vazio";
+  btnText.textContent = "Selecione as comarcas...";
+  var btnSeta = document.createElement("span");
+  btnSeta.className = "fa-comarcas-btn-seta";
+  btnSeta.textContent = "▾";
+  btn.appendChild(btnText);
+  btn.appendChild(btnSeta);
 
-  if (!lista || !wrapper) return;
+  var painel = document.createElement("div");
+  painel.id = "fa-comarcas-painel";
+  painel.className = "fa-comarcas-painel hidden";
 
-  var termo = normalizarComarca(obterCampoComarca().value);
-  var filtradas = termo
-    ? comarcasFormulario.filter(function(nome) {
-        return normalizarComarca(nome).includes(termo);
-      })
-    : comarcasFormulario.slice();
+  var busca = document.createElement("input");
+  busca.type = "search";
+  busca.id = "fa-comarcas-busca";
+  busca.className = "fa-comarcas-busca";
+  busca.placeholder = "Buscar comarca...";
+  busca.autocomplete = "off";
 
-  indiceAtivoCombobox = -1;
+  var lista = document.createElement("div");
+  lista.id = "fa-comarcas-lista";
+  lista.className = "fa-comarcas-lista";
 
-  lista.textContent = "";
+  var rodape = document.createElement("div");
+  rodape.className = "fa-comarcas-rodape";
+  var btnLimpar = document.createElement("button");
+  btnLimpar.type = "button";
+  btnLimpar.className = "btn btn-secondary";
+  btnLimpar.textContent = "Limpar";
+  btnLimpar.style.cssText = "padding:6px 10px;font-size:12px;";
+  var btnOk = document.createElement("button");
+  btnOk.type = "button";
+  btnOk.className = "btn btn-primary";
+  btnOk.textContent = "OK";
+  btnOk.style.cssText = "padding:6px 14px;font-size:12px;";
+  rodape.appendChild(btnLimpar);
+  rodape.appendChild(btnOk);
 
-  if (filtradas.length === 0) {
-    var liVazio = document.createElement("li");
-    liVazio.className = "fa-combobox-vazio";
-    liVazio.textContent = "Nenhuma comarca encontrada";
-    lista.appendChild(liVazio);
-  } else {
-    filtradas.forEach(function(nome) {
-      var li = document.createElement("li");
-      li.setAttribute("role", "option");
-      li.textContent = nome;
-      li.addEventListener("mousedown", function(evento) {
-        evento.preventDefault();
-        selecionarComboboxComarca(nome);
-      });
-      li.addEventListener("mouseenter", function() {
-        marcarItemAtivoCombobox(li);
-      });
-      lista.appendChild(li);
-    });
-  }
+  painel.appendChild(busca);
+  painel.appendChild(lista);
+  painel.appendChild(rodape);
+  wrapper.appendChild(btn);
+  wrapper.appendChild(painel);
+  holder.appendChild(wrapper);
 
-  lista.classList.remove("hidden");
-  wrapper.classList.add("aberto");
-}
-
-function fecharComboboxComarca() {
-  var lista = obterListaCombobox();
-  var wrapper = obterWrapperCombobox();
-
-  if (!lista || !wrapper) return;
-
-  lista.classList.add("hidden");
-  wrapper.classList.remove("aberto");
-  indiceAtivoCombobox = -1;
-}
-
-function marcarItemAtivoCombobox(item) {
-  var lista = obterListaCombobox();
-  if (!lista) return;
-
-  Array.prototype.forEach.call(lista.children, function(li, i) {
-    if (li === item) {
-      li.classList.add("ativo");
-      indiceAtivoCombobox = i;
+  function atualizarBotaoComarcas() {
+    var nomes = Object.keys(faComarcasSelecionadas).map(function(k){ return faComarcasSelecionadas[k]; });
+    var t = document.getElementById("fa-comarcas-btn-text");
+    var hidden = document.getElementById("acesso-comarca-valor");
+    if (hidden) hidden.value = nomes.join(", ");
+    if (!t) return;
+    if (nomes.length === 0) {
+      t.textContent = "Selecione as comarcas...";
+      t.className = "fa-comarcas-btn-text vazio";
+      btn.title = "Selecione ao menos uma comarca";
+    } else if (nomes.length === 1) {
+      t.textContent = nomes[0];
+      t.className = "fa-comarcas-btn-text";
+      btn.title = nomes[0];
     } else {
-      li.classList.remove("ativo");
+      var txt = nomes.join(", ");
+      t.textContent = nomes.length + " comarcas: " + (txt.length > 50 ? txt.slice(0,47)+"…" : txt);
+      t.className = "fa-comarcas-btn-text";
+      btn.title = txt;
     }
-  });
-}
-
-function moverSelecaoCombobox(direcao) {
-  var lista = obterListaCombobox();
-  if (!lista || lista.classList.contains("hidden")) {
-    abrirComboboxComarca();
-    return;
   }
 
-  var itens = Array.prototype.filter.call(lista.children, function(li) {
-    return !li.classList.contains("fa-combobox-vazio");
-  });
-
-  if (itens.length === 0) return;
-
-  indiceAtivoCombobox =
-    (indiceAtivoCombobox + direcao + itens.length) % itens.length;
-
-  itens.forEach(function(li, i) {
-    li.classList.toggle("ativo", i === indiceAtivoCombobox);
-    if (i === indiceAtivoCombobox) {
-      li.scrollIntoView({ block: "nearest" });
+  function renderListaComarcas() {
+    lista.textContent = "";
+    if (comarcasFormulario.length === 0) {
+      var v = document.createElement("div");
+      v.style.cssText = "padding:10px;text-align:center;color:#94a3b8;font-size:13px;";
+      v.textContent = "Nenhuma comarca cadastrada";
+      lista.appendChild(v);
+      return;
     }
-  });
-}
-
-function selecionarComboboxComarca(nome) {
-  var campo = obterCampoComarca();
-  var valorOculto = document.getElementById("acesso-comarca-valor");
-
-  if (!campo || !valorOculto) return;
-
-  campo.value = nome;
-  valorOculto.value = nome;
-  fecharComboboxComarca();
-  limparMensagemFormularioAcesso();
-}
-
-function comboboxComarcaValida() {
-  var campo = obterCampoComarca();
-  var valorOculto = document.getElementById("acesso-comarca-valor");
-  if (!campo || !valorOculto) return false;
-
-  var digitado = normalizarComarca(campo.value);
-  var selecionado = normalizarComarca(valorOculto.value);
-
-  if (digitado && digitado === selecionado) {
-    return true;
-  }
-
-  /* Aceita se o texto digitado corresponde exatamente a uma comarca. */
-  if (digitado) {
-    var encontrada = comarcasFormulario.some(function(nome) {
-      return normalizarComarca(nome) === digitado;
+    var termo = normalizarComarca(busca.value || "");
+    var filtradas = termo ? comarcasFormulario.filter(function(n){ return normalizarComarca(n).includes(termo); }) : comarcasFormulario.slice();
+    if (filtradas.length === 0) {
+      var vv = document.createElement("div");
+      vv.style.cssText = "padding:10px;text-align:center;color:#94a3b8;font-size:13px;";
+      vv.textContent = "Nenhuma comarca encontrada";
+      lista.appendChild(vv);
+      return;
+    }
+    filtradas.forEach(function(nome){
+      var label = document.createElement("label");
+      var cb = document.createElement("input");
+      cb.type = "checkbox";
+      cb.checked = !!faComarcasSelecionadas[normalizarComarca(nome)];
+      cb.addEventListener("change", function(){
+        var k = normalizarComarca(nome);
+        if (cb.checked) faComarcasSelecionadas[k] = nome;
+        else delete faComarcasSelecionadas[k];
+        atualizarBotaoComarcas();
+      });
+      var span = document.createElement("span");
+      span.textContent = nome;
+      label.appendChild(cb);
+      label.appendChild(span);
+      lista.appendChild(label);
     });
-
-    if (encontrada) {
-      valorOculto.value = campo.value.trim();
-      return true;
-    }
   }
 
-  return false;
+  btn.addEventListener("click", function(e){
+    e.stopPropagation();
+    var fechado = painel.classList.contains("hidden");
+    document.querySelectorAll(".fa-comarcas-painel").forEach(function(o){ if(o!==painel) o.classList.add("hidden"); });
+    if (fechado) { renderListaComarcas(); painel.classList.remove("hidden"); busca.focus(); }
+    else painel.classList.add("hidden");
+  });
+  busca.addEventListener("input", renderListaComarcas);
+  btnLimpar.addEventListener("click", function(){ faComarcasSelecionadas = {}; renderListaComarcas(); atualizarBotaoComarcas(); });
+  btnOk.addEventListener("click", function(){ painel.classList.add("hidden"); });
+  document.addEventListener("click", function(ev){
+    if (!wrapper.contains(ev.target)) painel.classList.add("hidden");
+  });
+  window._faAtualizarBotaoComarcas = atualizarBotaoComarcas;
+  window._faRenderListaComarcas = renderListaComarcas;
+  atualizarBotaoComarcas();
 }
 
-function iniciarComboboxComarca() {
-  var campo = obterCampoComarca();
-  var wrapper = obterWrapperCombobox();
+function obterComarcasSelecionadasFormulario() {
+  return Object.keys(faComarcasSelecionadas).map(function(k){ return faComarcasSelecionadas[k]; }).join(", ");
+}
 
-  if (!campo || !wrapper) return;
-
-  campo.addEventListener("focus", function() {
-    abrirComboboxComarca();
+function validarComarcasFormulario() {
+  var raw = obterComarcasSelecionadasFormulario().trim();
+  if (!raw) return false;
+  // valida que todas existem
+  var nomes = raw.split(/[,;|]+/).map(function(s){ return String(s).trim(); }).filter(Boolean);
+  if (nomes.length === 0) return false;
+  return nomes.every(function(n){
+    return comarcasFormulario.some(function(c){ return normalizarComarca(c) === normalizarComarca(n); });
   });
+}
 
-  campo.addEventListener("input", function() {
-    document.getElementById("acesso-comarca-valor").value = "";
-    abrirComboboxComarca();
-  });
+// ---- Prefill nome bloqueado + perfil hints ----
 
-  campo.addEventListener("keydown", function(evento) {
-    if (evento.key === "ArrowDown") {
-      evento.preventDefault();
-      moverSelecaoCombobox(1);
-    } else if (evento.key === "ArrowUp") {
-      evento.preventDefault();
-      moverSelecaoCombobox(-1);
-    } else if (evento.key === "Enter") {
-      var lista = obterListaCombobox();
-      var ativo = lista && lista.querySelector("li.ativo");
+function aplicarEstadoFormularioPorPerfil() {
+  var nomeEl = document.getElementById("acesso-nome");
+  var emailEl = document.getElementById("acesso-email");
+  var perfilEl = document.getElementById("acesso-perfil");
+  var hint = document.getElementById("perfil-hint");
+  if (!nomeEl || !emailEl || !perfilEl) return;
 
-      if (ativo && !ativo.classList.contains("fa-combobox-vazio")) {
-        evento.preventDefault();
-        selecionarComboboxComarca(ativo.textContent);
-      }
-    } else if (evento.key === "Escape") {
-      fecharComboboxComarca();
-    } else if (evento.key === "Tab") {
-      fecharComboboxComarca();
+  var ehGC = ehGestorConteudoLogado();
+  var perfil = String(perfilEl.value || "").toUpperCase();
+
+  // Nome bloqueado para GC logado
+  if (ehGC) {
+    var nomeGC = "";
+    try { nomeGC = String(usuarioAtual.nome || "").trim(); } catch(e){}
+    if (nomeGC && nomeGC !== "Visitante") {
+      nomeEl.value = nomeGC;
+      nomeEl.readOnly = true;
+      nomeEl.classList.add("fa-nome-bloqueado");
+      nomeEl.title = "Seu nome vem do seu cadastro — não é necessário criar nova conta.";
     }
-  });
-
-  campo.addEventListener("blur", function() {
-    setTimeout(fecharComboboxComarca, 150);
-  });
+    var emailGC = "";
+    try { emailGC = String(usuarioAtual.email || "").trim().toLowerCase(); } catch(e){}
+    if (emailGC) {
+      emailEl.value = emailGC;
+      emailEl.readOnly = true;
+      emailEl.style.background = "#f1f5f9";
+      emailEl.style.color = "#475569";
+    }
+    if (hint) {
+      if (perfil === "GESTOR_SISTEMA") hint.textContent = "Você pedirá promoção a Gestor do Sistema (acesso total).";
+      else hint.textContent = "Você pedirá acesso a mais comarcas como Gestor de Conteúdo.";
+      hint.style.color = "#64748b";
+    }
+  } else {
+    nomeEl.readOnly = false;
+    nomeEl.classList.remove("fa-nome-bloqueado");
+    nomeEl.title = "";
+    emailEl.readOnly = false;
+    emailEl.style.background = "";
+    emailEl.style.color = "";
+    if (hint) hint.textContent = "";
+  }
 }
 
 function exibirMensagemFormularioAcesso(mensagem, tipo) {
   var elemento = document.getElementById("formulario-acesso-mensagem");
   if (!elemento) return;
-
   var sucesso = tipo === "success";
-
   elemento.textContent = (sucesso ? "✅ " : "⚠️ ") + String(mensagem || "");
   elemento.style.backgroundColor = sucesso ? "#dcfce7" : "#fee2e2";
   elemento.style.border = "1px solid " + (sucesso ? "#bbf7d0" : "#fecaca");
@@ -617,28 +656,33 @@ function limparMensagemFormularioAcesso() {
 function enviarFormularioAcesso() {
   limparMensagemFormularioAcesso();
 
-  var nome = document.getElementById("acesso-nome").value.trim();
-  var comarca = document.getElementById("acesso-comarca-valor").value.trim() ||
-    document.getElementById("acesso-comarca").value.trim();
-  var email = document.getElementById("acesso-email").value.trim().toLowerCase();
-  var perfil = document.getElementById("acesso-perfil").value.trim();
-  var justificativa = document.getElementById("acesso-justificativa").value.trim();
+  var nomeEl = document.getElementById("acesso-nome");
+  var emailEl = document.getElementById("acesso-email");
+  var perfilEl = document.getElementById("acesso-perfil");
+  var justEl = document.getElementById("acesso-justificativa");
+
+  var ehGC = ehGestorConteudoLogado();
+  var nome = nomeEl ? String(nomeEl.value || "").trim() : "";
+  // Se GC, garante nome do cadastro
+  if (ehGC) {
+    try { var nGC = String(usuarioAtual.nome || "").trim(); if (nGC && nGC !== "Visitante") nome = nGC; } catch(e){}
+  }
+  var comarca = obterComarcasSelecionadasFormulario().trim();
+  var email = emailEl ? String(emailEl.value || "").trim().toLowerCase() : "";
+  if (ehGC) { try { var eGC = String(usuarioAtual.email || "").trim().toLowerCase(); if (eGC) email = eGC; } catch(e2){} }
+  var perfil = perfilEl ? String(perfilEl.value || "").trim().toUpperCase() : "";
+  var justificativa = justEl ? String(justEl.value || "").trim() : "";
 
   if (nome.length < 3) {
     exibirMensagemFormularioAcesso("Informe o seu nome completo.", "error");
     return;
   }
 
-  if (!comboboxComarcaValida()) {
-    exibirMensagemFormularioAcesso(
-      "Digite parte do nome e selecione a comarca correta na lista.",
-      "error"
-    );
+  if (!validarComarcasFormulario()) {
+    exibirMensagemFormularioAcesso("Selecione ao menos uma comarca na lista.", "error");
     return;
   }
-
-  comarca = document.getElementById("acesso-comarca-valor").value.trim() ||
-    document.getElementById("acesso-comarca").value.trim();
+  comarca = obterComarcasSelecionadasFormulario().trim();
 
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
     exibirMensagemFormularioAcesso("Informe um e-mail válido.", "error");
@@ -647,6 +691,11 @@ function enviarFormularioAcesso() {
 
   if (!email.endsWith("@tjes.jus.br")) {
     exibirMensagemFormularioAcesso("Utilize o e-mail institucional (@tjes.jus.br).", "error");
+    return;
+  }
+
+  if (perfil !== "GESTOR_CONTEUDO" && perfil !== "GESTOR_SISTEMA") {
+    exibirMensagemFormularioAcesso("Selecione o perfil solicitado.", "error");
     return;
   }
 
@@ -661,85 +710,73 @@ function enviarFormularioAcesso() {
   }
 
   var botao = document.getElementById("btn-enviar-formulario-acesso");
-  if (botao) {
-    botao.disabled = true;
-    botao.textContent = "Enviando...";
-  }
+  if (botao) { botao.disabled = true; botao.textContent = "Enviando..."; }
 
   API.enviarFormularioAcesso(
-    {
-      nome: nome,
-      comarca: comarca,
-      email: email,
-      perfil: perfil,
-      justificativa: justificativa
-    },
+    { nome: nome, comarca: comarca, email: email, perfil: perfil, justificativa: justificativa },
     function(resposta) {
-      if (botao) {
-        botao.disabled = false;
-        botao.textContent = "Enviar solicitação →";
-      }
-
+      if (botao) { botao.disabled = false; botao.textContent = "Enviar solicitação →"; }
       if (resposta && resposta.sucesso === true) {
-        document.getElementById("acesso-nome").value = "";
-        document.getElementById("acesso-comarca").value = "";
-        document.getElementById("acesso-comarca-valor").value = "";
-        document.getElementById("acesso-email").value = "";
-        document.getElementById("acesso-justificativa").value = "";
-
-        exibirMensagemFormularioAcesso(
-          "Solicitação enviada com sucesso! Você receberá o retorno pelo seu e-mail.",
-          "success"
-        );
-
-        if (typeof mostrarToast === "function") {
-          mostrarToast("Solicitação enviada com sucesso!", "success");
+        // Não limpa nome/email se GC (mantém bloqueado)
+        if (!ehGC) {
+          if (nomeEl) nomeEl.value = "";
+          if (emailEl) emailEl.value = "";
         }
+        faComarcasSelecionadas = {};
+        if (window._faAtualizarBotaoComarcas) window._faAtualizarBotaoComarcas();
+        if (justEl) justEl.value = "";
+        exibirMensagemFormularioAcesso("Solicitação enviada com sucesso! Você receberá o retorno pelo seu e-mail.", "success");
+        if (typeof mostrarToast === "function") mostrarToast("Solicitação enviada com sucesso!", "success");
       } else {
-        exibirMensagemFormularioAcesso(
-          (resposta && resposta.erro) || "Erro ao enviar a solicitação.",
-          "error"
-        );
+        exibirMensagemFormularioAcesso((resposta && resposta.erro) || "Erro ao enviar a solicitação.", "error");
       }
     },
     function(erro) {
-      if (botao) {
-        botao.disabled = false;
-        botao.textContent = "Enviar solicitação →";
-      }
-
-      exibirMensagemFormularioAcesso(
-        (erro && erro.message) || "Falha de comunicação com o servidor.",
-        "error"
-      );
+      if (botao) { botao.disabled = false; botao.textContent = "Enviar solicitação →"; }
+      exibirMensagemFormularioAcesso((erro && erro.message) || "Falha de comunicação com o servidor.", "error");
     }
   );
 }
 
 document.addEventListener("DOMContentLoaded", function() {
+  // Prefill email/nome se já logado — mas nome pode ser sobrescrito por aplicarEstado
   var email = "";
   var nome = "";
-
-  if (
-    typeof usuarioAtual !== "undefined" &&
-    usuarioAtual
-  ) {
-    email = String(usuarioAtual.email || "").trim();
-    nome = String(usuarioAtual.nome || "").trim();
-  }
-
+  try {
+    if (typeof usuarioAtual !== "undefined" && usuarioAtual) {
+      email = String(usuarioAtual.email || "").trim();
+      nome = String(usuarioAtual.nome || "").trim();
+    }
+  } catch(e){}
   var campoEmail = document.getElementById("acesso-email");
   var campoNome = document.getElementById("acesso-nome");
+  if (campoEmail && email && !campoEmail.value) campoEmail.value = email;
+  if (campoNome && nome && nome !== "Visitante" && !campoNome.value) campoNome.value = nome;
 
-  if (campoEmail && email && !campoEmail.value) {
-    campoEmail.value = email;
-  }
-
-  if (campoNome && nome && nome !== "Visitante" && !campoNome.value) {
-    campoNome.value = nome;
-  }
-
-  iniciarComboboxComarca();
+  iniciarComboboxComarcaCompat();
   carregarComarcasCombobox();
+
+  var perfilSel = document.getElementById("acesso-perfil");
+  if (perfilSel) perfilSel.addEventListener("change", aplicarEstadoFormularioPorPerfil);
+
+  // Aplica estado após usuarioAtual assíncrono carregar — tenta algumas vezes
+  var tentativas = 0;
+  var iv = setInterval(function(){
+    tentativas++;
+    try { aplicarEstadoFormularioPorPerfil(); } catch(e){}
+    if (tentativas >= 10) clearInterval(iv);
+    // Se virou GC, para cedo
+    try { if (ehGestorConteudoLogado()) clearInterval(iv); } catch(e2){}
+  }, 500);
+  setTimeout(aplicarEstadoFormularioPorPerfil, 1200);
 });
+
+// Compat: mantém função antiga chamada no DOMContentLoaded
+function iniciarComboboxComarcaCompat(){ try{ if(typeof iniciarComboboxComarca==="function") return; }catch(e){} }
+function iniciarComboboxComarca(){}
+function abrirComboboxComarca(){}
+function fecharComboboxComarca(){}
+function comboboxComarcaValida(){ return validarComarcasFormulario(); }
+function selecionarComboboxComarca(n){ var k=normalizarComarca(n); faComarcasSelecionadas[k]=n; if(window._faAtualizarBotaoComarcas) window._faAtualizarBotaoComarcas(); }
 </script>
+
