@@ -133,11 +133,12 @@ function criarSeletorComarcas(valorInicial) {
 
   var painel = document.createElement("div");
   painel.className = "hidden";
+  painel.dataset.fixed = "0";
   painel.style.cssText =
-    "position:absolute;top:calc(100% + 4px);left:0;right:0;z-index:60;" +
+    "position:absolute;top:calc(100% + 4px);left:0;right:0;z-index:9999;" +
     "background:#ffffff;border:1.5px solid #cbd5e1;border-radius:10px;" +
     "box-shadow:0 12px 28px -10px rgba(15,23,42,0.25);padding:8px;" +
-    "max-height:300px;display:flex;flex-direction:column;";
+    "max-height:320px;display:flex;flex-direction:column;";
 
   var busca = document.createElement("input");
   busca.type = "search";
@@ -254,6 +255,37 @@ function criarSeletorComarcas(valorInicial) {
     });
   }
 
+  function posicionarPainelFixamente() {
+    try {
+      var rect = botao.getBoundingClientRect();
+      var vw = Math.max(document.documentElement.clientWidth || 0, window.innerWidth || 0);
+      var vh = Math.max(document.documentElement.clientHeight || 0, window.innerHeight || 0);
+      var width = Math.min(Math.max(rect.width, 280), 360);
+      // limit to viewport with margin
+      if (rect.left + width > vw - 12) {
+        width = Math.max(260, vw - rect.left - 12);
+      }
+      painel.style.position = "fixed";
+      painel.style.left = rect.left + "px";
+      painel.style.top = (rect.bottom + 6) + "px";
+      painel.style.right = "auto";
+      painel.style.width = width + "px";
+      painel.style.maxHeight = Math.min(320, vh - rect.bottom - 16) + "px";
+      painel.style.zIndex = "9999";
+      painel.dataset.fixed = "1";
+    } catch (e) {}
+  }
+
+  function restaurarPainelAbsoluto() {
+    painel.style.position = "absolute";
+    painel.style.left = "0";
+    painel.style.right = "0";
+    painel.style.top = "calc(100% + 4px)";
+    painel.style.width = "";
+    painel.style.maxHeight = "320px";
+    painel.dataset.fixed = "0";
+  }
+
   botao.addEventListener("click", function(evento) {
     evento.stopPropagation();
 
@@ -262,16 +294,30 @@ function criarSeletorComarcas(valorInicial) {
     document.querySelectorAll(".usuario-comarcas-picker > div").forEach(function(outro) {
       if (outro !== painel) {
         outro.classList.add("hidden");
+        // restore any fixed panels that were closed
+        try { outro.style.position = "absolute"; outro.dataset.fixed = "0"; } catch(e2){}
       }
     });
 
     if (fechado) {
       renderizarLista();
+      posicionarPainelFixamente();
       painel.classList.remove("hidden");
+      // reposition after render in case height changed
+      setTimeout(posicionarPainelFixamente, 0);
       busca.focus();
     } else {
       painel.classList.add("hidden");
+      restaurarPainelAbsoluto();
     }
+  });
+
+  // Reposition on scroll/resize while open, and restore when closed
+  window.addEventListener("scroll", function(){
+    if (!painel.classList.contains("hidden") && painel.dataset.fixed === "1") posicionarPainelFixamente();
+  }, true);
+  window.addEventListener("resize", function(){
+    if (!painel.classList.contains("hidden") && painel.dataset.fixed === "1") posicionarPainelFixamente();
   });
 
   busca.addEventListener("input", renderizarLista);
@@ -287,8 +333,9 @@ function criarSeletorComarcas(valorInicial) {
   });
 
   document.addEventListener("click", function fecharFora(evento) {
-    if (!wrapper.contains(evento.target)) {
+    if (!wrapper.contains(evento.target) && !painel.contains(evento.target)) {
       painel.classList.add("hidden");
+      restaurarPainelAbsoluto();
     }
   });
 

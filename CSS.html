@@ -406,6 +406,25 @@ body{
   background:var(--bg-panel)
 }
 
+
+/* Usuarios — fix dropdown clipped by table-panel overflow */
+.usuarios-container .table-panel{
+  overflow: visible !important;
+  overflow-x: visible !important;
+}
+.usuarios-container .table-panel > div{
+  overflow-x: auto;
+}
+.usuarios-container{
+  padding-bottom: 80px;
+}
+.usuario-comarcas-picker > div{
+  /* painel will be switched to fixed via JS when opened to escape overflow */
+}
+@media(max-width:900px){
+  .usuarios-container .table-panel{ overflow: visible !important; }
+}
+
 /* ==========================================================
    MODO ESCURO
    ========================================================== */
