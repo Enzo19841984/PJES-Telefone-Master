@@ -438,10 +438,29 @@ function atualizarListaLocalTelefone(
           registro
         );
     }
+
+    if (
+      typeof todosTelefones !== "undefined" &&
+      Array.isArray(todosTelefones)
+    ) {
+      const idx2 =
+        todosTelefones.findIndex(item =>
+          String(item.ID || item.id || "").trim() === String(idEdicao).trim()
+        );
+
+      if (idx2 >= 0) {
+        todosTelefones[idx2] = Object.assign({}, todosTelefones[idx2], registro);
+      }
+    }
   } else if (idRegistro) {
-    listaTelefones.push(
-      registro
-    );
+    listaTelefones.push(registro);
+
+    if (
+      typeof todosTelefones !== "undefined" &&
+      Array.isArray(todosTelefones)
+    ) {
+      todosTelefones.push(Object.assign({}, registro));
+    }
   }
 
   if (

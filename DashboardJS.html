@@ -91,10 +91,22 @@ function iniciarConsultaTelefones() {
 
       todosTelefones = Array.isArray(resp.dados) ? resp.dados : [];
 
+      if (typeof listaTelefones !== "undefined") {
+        listaTelefones = Array.isArray(resp.dados) ? resp.dados.slice() : [];
+      }
+
       processarDados();
       preencherFiltroMicrorregiao();
       renderizarComarcas();
       atualizarDashboardPublico(todosTelefones);
+
+      if (typeof carregarFiltros === "function") {
+        try { carregarFiltros(); } catch (e) { console.error("carregarFiltros:", e); }
+      }
+
+      if (typeof atualizarTabelaComFiltros === "function") {
+        try { atualizarTabelaComFiltros(); } catch (e) { console.error("atualizarTabelaComFiltros:", e); }
+      }
 
       /* Estado inicial: mapa visível e impressão oculta. */
       mostrarMapaConsulta();

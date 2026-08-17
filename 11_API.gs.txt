@@ -129,9 +129,34 @@ function listarComarcas() {
     const dados =
       new TelefoneRepository().listar();
 
+    const usuarioComarcas =
+      new AuthService().usuarioAtual();
+
+    let dadosFiltrados = dados;
+
+    if (
+      usuarioComarcas.logado &&
+      usuarioComarcas.perfil === CONFIG.PERFIS.GESTOR_CONTEUDO &&
+      (usuarioComarcas.comarcas || []).length > 0
+    ) {
+      const permitidasComarcas =
+        usuarioComarcas.comarcas.map(item =>
+          normalizarChave(item)
+        );
+
+      dadosFiltrados =
+        dados.filter(item =>
+          permitidasComarcas.includes(
+            normalizarChave(
+              textoSeguro(item.comarca)
+            )
+          )
+        );
+    }
+
     const comarcas = {};
 
-    dados.forEach(item => {
+    dadosFiltrados.forEach(item => {
       const comarca =
         textoSeguro(item.comarca);
 
@@ -176,9 +201,33 @@ function pesquisarTelefones(texto) {
       return respostaSucesso([]);
     }
 
-    return respostaSucesso(
-      new TelefoneRepository().pesquisar(termo)
-    );
+    let resultadoPesquisa =
+      new TelefoneRepository().pesquisar(termo);
+
+    const usuarioPesquisa =
+      new AuthService().usuarioAtual();
+
+    if (
+      usuarioPesquisa.logado &&
+      usuarioPesquisa.perfil === CONFIG.PERFIS.GESTOR_CONTEUDO &&
+      (usuarioPesquisa.comarcas || []).length > 0
+    ) {
+      const permitidasPesquisa =
+        usuarioPesquisa.comarcas.map(item =>
+          normalizarChave(item)
+        );
+
+      resultadoPesquisa =
+        resultadoPesquisa.filter(item =>
+          permitidasPesquisa.includes(
+            normalizarChave(
+              textoSeguro(item.comarca)
+            )
+          )
+        );
+    }
+
+    return respostaSucesso(resultadoPesquisa);
   } catch (erro) {
     registrarErroAPI(
       "PESQUISAR_TELEFONES",
@@ -203,9 +252,16 @@ function obterTelefone(id) {
       );
     }
 
-    return respostaSucesso(
-      new TelefoneRepository().obter(idBusca)
-    );
+    const registroTelefone =
+      new TelefoneRepository().obter(idBusca);
+
+    if (registroTelefone) {
+      new AuthService().exigirPermissaoComarca(
+        textoSeguro(registroTelefone.comarca)
+      );
+    }
+
+    return respostaSucesso(registroTelefone);
   } catch (erro) {
     registrarErroAPI(
       "OBTER_TELEFONE",
@@ -225,11 +281,36 @@ function carregarDashboard() {
     const telefones =
       new TelefoneRepository().listar();
 
+    const usuarioDashboard =
+      new AuthService().usuarioAtual();
+
+    let telefonesDashboard = telefones;
+
+    if (
+      usuarioDashboard.logado &&
+      usuarioDashboard.perfil === CONFIG.PERFIS.GESTOR_CONTEUDO &&
+      (usuarioDashboard.comarcas || []).length > 0
+    ) {
+      const permitidasDash =
+        usuarioDashboard.comarcas.map(item =>
+          normalizarChave(item)
+        );
+
+      telefonesDashboard =
+        telefones.filter(item =>
+          permitidasDash.includes(
+            normalizarChave(
+              textoSeguro(item.comarca)
+            )
+          )
+        );
+    }
+
     const tipos = {};
     const setores = {};
     const comarcas = {};
 
-    telefones.forEach(item => {
+    telefonesDashboard.forEach(item => {
       const tipo =
         textoSeguro(item.tipo) ||
         "Não informado";
@@ -253,7 +334,7 @@ function carregarDashboard() {
     });
 
     return respostaSucesso({
-      total: telefones.length,
+      total: telefonesDashboard.length,
       tipos: tipos,
       setores: setores,
       comarcas: comarcas
@@ -409,6 +490,15 @@ function listarHistorico(id) {
     if (!idBusca) {
       throw new Error(
         "ID do telefone é obrigatório."
+      );
+    }
+
+    const registroHistorico =
+      new TelefoneRepository().obter(idBusca);
+
+    if (registroHistorico) {
+      new AuthService().exigirPermissaoComarca(
+        textoSeguro(registroHistorico.comarca)
       );
     }
 
@@ -688,18 +778,22 @@ function solicitarAcesso(nome, perfil, justificativa, comarca) {
     const dados =
       sheet.getDataRange().getValues();
 
+    const indices = indicesSolicitacao(dados[0] || []);
+
     const emailSolicitante =
       normalizarEmail(usuario.email);
 
     const existePendente =
       dados.slice(1).some(row => {
         const emailLinha =
-          normalizarEmail(row[1]);
+          indices.EMAIL !== undefined
+            ? normalizarEmail(row[indices.EMAIL])
+            : normalizarEmail(row[1]);
 
         const statusLinha =
-          String(row[5] || "")
-            .trim()
-            .toUpperCase();
+          indices.STATUS !== undefined
+            ? String(row[indices.STATUS] || "").trim().toUpperCase()
+            : String(row[5] || "").trim().toUpperCase();
 
         return (
           emailLinha === emailSolicitante &&
@@ -712,8 +806,6 @@ function solicitarAcesso(nome, perfil, justificativa, comarca) {
         "Já existe uma solicitação pendente para este e-mail."
       );
     }
-
-    const indices = indicesSolicitacao(dados[0] || []);
 
     const id = Utilities.getUuid();
 
@@ -1726,9 +1818,32 @@ function listarHistoricoGeral() {
         };
       });
 
-    return respostaSucesso(
-      resultado
-    );
+    let historicoFiltrado = resultado;
+
+    const usuarioHistorico =
+      new AuthService().usuarioAtual();
+
+    if (
+      usuarioHistorico.logado &&
+      usuarioHistorico.perfil === CONFIG.PERFIS.GESTOR_CONTEUDO &&
+      (usuarioHistorico.comarcas || []).length > 0
+    ) {
+      const permitidasHist =
+        usuarioHistorico.comarcas.map(item =>
+          normalizarChave(item)
+        );
+
+      historicoFiltrado =
+        resultado.filter(item =>
+          permitidasHist.includes(
+            normalizarChave(
+              textoSeguro(item.comarca)
+            )
+          )
+        );
+    }
+
+    return respostaSucesso(historicoFiltrado);
 
   } catch (erro) {
     registrarErroAPI(
@@ -2477,43 +2592,33 @@ function atualizarUsuario(email, dados) {
           )
         : null;
 
-    const perfilNovo =
-      String(
-        valorObjeto(entrada, "perfil", "PERFIL")
-          || CONFIG.PERFIS.USUARIO_CONSULTA
-      )
-        .trim()
-        .toUpperCase();
+    const possuiPerfil =
+      possuiCampo(entrada, "perfil", "PERFIL");
 
-    const perfisValidos = [
-      CONFIG.PERFIS.GESTOR_SISTEMA,
-      CONFIG.PERFIS.GESTOR_CONTEUDO,
-      CONFIG.PERFIS.USUARIO_CONSULTA
-    ];
+    const possuiAtivo =
+      possuiCampo(entrada, "ativo", "ATIVO");
 
-    if (!perfisValidos.includes(perfilNovo)) {
-      throw new Error("Perfil inválido.");
-    }
+    const possuiComarcas =
+      possuiCampo(entrada, "comarcas", "COMARCAS");
 
-    const ativoNovo =
-      paraBoolean(
-        valorObjeto(entrada, "ativo", "ATIVO")
-      );
+    const perfilBruto =
+      possuiPerfil
+        ? String(
+            valorObjeto(entrada, "perfil", "PERFIL") || ""
+          )
+            .trim()
+            .toUpperCase()
+        : null;
 
-    const comarcasNovo =
-      parseComarcas(
-        valorObjeto(entrada, "comarcas", "COMARCAS")
-      );
+    const ativoBruto =
+      possuiAtivo
+        ? valorObjeto(entrada, "ativo", "ATIVO")
+        : null;
 
-    if (
-      perfilNovo === CONFIG.PERFIS.GESTOR_CONTEUDO &&
-      comarcasNovo.length > 0
-    ) {
-      // valida apenas que o texto não contém separadores inválidos
-      if (comarcasNovo.some(item => item.length > 150)) {
-        throw new Error("Nome de comarca muito longo.");
-      }
-    }
+    const comarcasBruto =
+      possuiComarcas
+        ? valorObjeto(entrada, "comarcas", "COMARCAS")
+        : null;
 
     const sheet = DB.usuarios();
     const mapa = DB.map(sheet);
@@ -2545,6 +2650,44 @@ function atualizarUsuario(email, dados) {
 
     const ativoAtual =
       paraBoolean(dadosSheet[linhaEncontrada - 1][idxAtivo - 1]);
+
+    const comarcasAtualRaw =
+      idxComarcas !== undefined
+        ? textoSeguro(dadosSheet[linhaEncontrada - 1][idxComarcas - 1])
+        : "";
+
+    const comarcasAtual = parseComarcas(comarcasAtualRaw);
+
+    const perfilNovo =
+      possuiPerfil ? perfilBruto : perfilAtual;
+
+    const perfisValidos = [
+      CONFIG.PERFIS.GESTOR_SISTEMA,
+      CONFIG.PERFIS.GESTOR_CONTEUDO,
+      CONFIG.PERFIS.USUARIO_CONSULTA
+    ];
+
+    if (!perfisValidos.includes(perfilNovo)) {
+      throw new Error("Perfil inválido.");
+    }
+
+    const ativoNovo =
+      possuiAtivo ? paraBoolean(ativoBruto) : ativoAtual;
+
+    const comarcasNovo =
+      possuiComarcas
+        ? parseComarcas(comarcasBruto)
+        : comarcasAtual;
+
+    if (
+      perfilNovo === CONFIG.PERFIS.GESTOR_CONTEUDO &&
+      comarcasNovo.length > 0
+    ) {
+      // valida apenas que o texto não contém separadores inválidos
+      if (comarcasNovo.some(item => item.length > 150)) {
+        throw new Error("Nome de comarca muito longo.");
+      }
+    }
 
     /*
      * Proteção: não permitir desativar/demover o último
@@ -2587,15 +2730,15 @@ function atualizarUsuario(email, dados) {
       sheet.getRange(linhaEncontrada, idxNome).setValue(nomeNovo);
     }
 
-    if (idxPerfil !== undefined) {
+    if (idxPerfil !== undefined && possuiPerfil) {
       sheet.getRange(linhaEncontrada, idxPerfil).setValue(perfilNovo);
     }
 
-    if (idxAtivo !== undefined) {
+    if (idxAtivo !== undefined && possuiAtivo) {
       sheet.getRange(linhaEncontrada, idxAtivo).setValue(ativoNovo ? "SIM" : "NÃO");
     }
 
-    if (idxComarcas !== undefined) {
+    if (idxComarcas !== undefined && possuiComarcas) {
       sheet.getRange(linhaEncontrada, idxComarcas).setValue(
         serializarComarcas(comarcasNovo)
       );

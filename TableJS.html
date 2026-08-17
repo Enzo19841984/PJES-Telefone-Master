@@ -1165,6 +1165,15 @@ function executarExclusaoTelefone() {
             idAlvo
         );
 
+      if (
+        typeof todosTelefones !== "undefined" &&
+        Array.isArray(todosTelefones)
+      ) {
+        todosTelefones = todosTelefones.filter(item =>
+          String(item.ID || item.id || "").trim() !== idAlvo
+        );
+      }
+
       fecharModalExclusao();
 
       if (
@@ -2082,4 +2091,37 @@ function renderizarTabelaHistorico(
     filtrarHistoricoNaTela();
   }
 }
+
+/**
+ * Handlers do histórico (referenciados no HTML gerado acima).
+ * Delegam para a lógica existente onde possível.
+ */
+function imprimirHistorico() {
+  if (typeof imprimirRegistroAlteracoes === "function") {
+    imprimirRegistroAlteracoes();
+    return;
+  }
+
+  window.print();
+}
+
+function filtrarHistoricoNaTela() {
+  const termo = String(
+    document.getElementById("busca-historico")?.value || ""
+  ).trim().toLowerCase();
+
+  const tbody = document.querySelector("#tabela-historico-print tbody");
+  if (!tbody) return;
+
+  Array.from(tbody.rows).forEach(tr => {
+    const texto = tr.textContent.toLowerCase();
+    tr.style.display = !termo || texto.includes(termo) ? "" : "none";
+  });
+}
+
+function alternarOrdemHistorico(ordem) {
+  ordemHistoricoAtual = ordem === "asc" ? "asc" : "desc";
+  renderizarTabelaHistorico(historicoDadosCache, ordemHistoricoAtual);
+}
+
 </script>
