@@ -228,12 +228,13 @@ function criarSeletorComarcas(valorInicial) {
     filtradas.forEach(function(nome) {
       var label = document.createElement("label");
       label.style.cssText =
-        "display:flex;align-items:center;gap:7px;padding:5px 6px;" +
-        "border-radius:6px;font-size:12px;cursor:pointer;";
+        "display:flex;align-items:center;justify-content:flex-start;gap:8px;padding:6px 8px;" +
+        "border-radius:8px;font-size:13px;cursor:pointer;width:100%;box-sizing:border-box;";
       label.addEventListener("mouseenter", function(){ label.style.background = "#f8fafc"; });
       label.addEventListener("mouseleave", function(){ label.style.background = "transparent"; });
       var checkbox = document.createElement("input");
       checkbox.type = "checkbox";
+      checkbox.style.cssText = "width:16px;height:16px;flex:0 0 16px;margin:0;accent-color:#2563eb;";
       checkbox.checked = !!selecionadas[normalizarComarcaKey(nome)];
 
       checkbox.addEventListener("change", function() {
@@ -248,6 +249,7 @@ function criarSeletorComarcas(valorInicial) {
 
       var span = document.createElement("span");
       span.textContent = nome;
+      span.style.cssText = "flex:1 1 auto;min-width:0;text-align:left;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;";
 
       label.appendChild(checkbox);
       label.appendChild(span);

@@ -530,6 +530,29 @@ function atualizarInterfaceUsuario() {
     }
   } catch (e) {}
 
+  // Botões de impressão — Telefones (admin)
+  try {
+    var btnTodos = document.getElementById("btn-imprimir-todos-numeros");
+    var btnPagina = document.getElementById("btn-imprimir-esta-pagina");
+    if (btnTodos) {
+      // Imprimir todos: Gestor Sistema + Gestor Conteúdo (admin), Visitante não vê (usa consulta)
+      btnTodos.style.display = (logado && perfil !== "USUARIO_CONSULTA") ? "" : "none";
+    }
+    if (btnPagina) {
+      // Imprimir esta página: só Gestor de Conteúdo (filtro local)
+      btnPagina.style.display = (logado && perfil === "GESTOR_CONTEUDO") ? "" : "none";
+    }
+  } catch(ePrintAdmin){}
+
+  // Botão topo Visitante — Imprimir todas as comarcas
+  try {
+    var btnComarcas = document.getElementById("btn-imprimir-todas-comarcas");
+    if (btnComarcas) {
+      // só Visitante (USUARIO_CONSULTA / não logado) — topo geral
+      btnComarcas.style.display = ehVisitante ? "" : "none";
+    }
+  } catch(ePrintVisit){}
+
   if (
     typeof listaTelefones !==
       "undefined" &&

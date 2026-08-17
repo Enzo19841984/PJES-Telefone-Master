@@ -445,6 +445,35 @@ body{
 }
 #grupo-novo-usuario-comarcas #novo-usuario-comarcas-container{margin-top:2px;}
 
+
+/* Fix: checkboxes in pickers must not be 100% width (global .form-group/.fa-field input rule) */
+.form-group input[type="checkbox"],
+.fa-field input[type="checkbox"],
+.usuario-comarcas-picker input[type="checkbox"],
+.fa-comarcas-lista input[type="checkbox"],
+.fa-comarcas-picker input[type="checkbox"]{
+  width:16px !important;
+  height:16px !important;
+  min-width:16px !important;
+  flex:0 0 16px !important;
+  margin:0 !important;
+  padding:0 !important;
+  accent-color:#2563eb;
+}
+.usuario-comarcas-picker label,
+.fa-comarcas-lista label{
+  justify-content:flex-start !important;
+}
+.usuario-comarcas-picker label span:last-child,
+.fa-comarcas-lista label span:last-child{
+  flex:1 1 auto;
+  min-width:0;
+  text-align:left;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+}
+
 /* ==========================================================
    MODO ESCURO
    ========================================================== */

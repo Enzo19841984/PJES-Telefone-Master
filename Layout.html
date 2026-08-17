@@ -16,7 +16,12 @@ Arquivo: Layout.html
         <h1>SISTEMA INTELIGENTE DE GESTÃO DE TELEFONES DO PJES</h1>
       </div>
 
-      <div id="user-info" class="user-info"></div>
+      <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;justify-content:flex-end;">
+        <button type="button" id="btn-imprimir-todas-comarcas" class="btn btn-secondary" style="display:none;padding:6px 10px;font-size:12px;" onclick="imprimirTodasComarcas()" title="Imprimir todas as comarcas com seus setores">
+          🖨️ Imprimir todas as comarcas
+        </button>
+        <div id="user-info" class="user-info"></div>
+      </div>
     </header>
 
     <section id="dashboard-view" class="view">

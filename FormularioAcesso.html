@@ -268,7 +268,7 @@ Arquivo: FormularioAcesso.html
   }
   .fa-comarcas-lista{overflow-y:auto;flex:1;min-height:60px;}
   .fa-comarcas-lista label{
-    display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:8px;font-size:13px;cursor:pointer;
+    display:flex;align-items:center;justify-content:flex-start;gap:8px;padding:6px 8px;border-radius:8px;font-size:13px;cursor:pointer;width:100%;box-sizing:border-box;
   }
   .fa-comarcas-lista label:hover{background:#f8fafc;}
   .fa-comarcas-rodape{
@@ -541,6 +541,7 @@ function construirPickerComarcas() {
       var label = document.createElement("label");
       var cb = document.createElement("input");
       cb.type = "checkbox";
+      cb.style.cssText = "width:16px;height:16px;flex:0 0 16px;margin:0;accent-color:#2563eb;";
       cb.checked = !!faComarcasSelecionadas[normalizarComarca(nome)];
       cb.addEventListener("change", function(){
         var k = normalizarComarca(nome);
@@ -550,6 +551,7 @@ function construirPickerComarcas() {
       });
       var span = document.createElement("span");
       span.textContent = nome;
+      span.style.cssText = "flex:1 1 auto;min-width:0;text-align:left;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;";
       label.appendChild(cb);
       label.appendChild(span);
       lista.appendChild(label);
