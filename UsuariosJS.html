@@ -639,14 +639,11 @@ function alternarComarcasNovoUsuario() {
   var perfil = document.getElementById("novo-usuario-perfil");
   var grupo = document.getElementById("grupo-novo-usuario-comarcas");
   if (!perfil || !grupo) return;
-  // Gestor do Sistema tem acesso a todas as comarcas; esconde o seletor para clareza
   if (perfil.value === "GESTOR_SISTEMA") {
-    grupo.style.opacity = "0.5";
-    grupo.style.pointerEvents = "none";
+    grupo.style.display = "none";
     grupo.title = "Gestor do Sistema tem acesso a todas as comarcas";
   } else {
-    grupo.style.opacity = "1";
-    grupo.style.pointerEvents = "";
+    grupo.style.display = "";
     grupo.title = "";
   }
 }
