@@ -433,8 +433,8 @@ function atualizarInterfaceUsuario() {
 
   const menuDashboard = document.getElementById("menu-dashboard");
   if (menuDashboard) {
-    // Dashboard somente para admins (Gestor Sistema / Conteúdo)
-    menuDashboard.classList.toggle("hidden", ehVisitante);
+    // Dashboard visível para todos (inclui Usuário de Consulta)
+    menuDashboard.classList.remove("hidden");
   }
 
   const menuFormulario = document.getElementById("menu-formulario");
@@ -718,12 +718,6 @@ function mostrarView(viewId) {
     var p = (typeof usuarioAtual !== "undefined" && usuarioAtual) ? String(usuarioAtual.perfil || "USUARIO_CONSULTA") : "USUARIO_CONSULTA";
     var logado = !!(typeof usuarioAtual !== "undefined" && usuarioAtual && usuarioAtual.logado === true);
     var ehGestorSistema = logado && p === "GESTOR_SISTEMA";
-    var ehVisitante = !logado || p === "USUARIO_CONSULTA";
-
-    if (viewId === "dashboard-view" && ehVisitante) {
-      mostrarToast("Dashboard disponível apenas para Gestor do Sistema e Gestor de Conteúdo.", "warning");
-      viewId = "consulta-telefones-view";
-    }
 
     if (viewId === "formulario-acesso-view" && ehGestorSistema) {
       mostrarToast("Gestores não precisam solicitar acesso.", "info");
