@@ -413,7 +413,7 @@ function initMapaLeaflet(containerId, isOverlay){
     return null;
   }
   var mapa = L.map(containerId, { zoomControl:true, attributionControl:true }).setView([-19.5, -40.3], 8);
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 18, attribution: '&copy; OpenStreetMap' }).addTo(mapa);
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', { maxZoom: 19, attribution: '&copy; OpenStreetMap &copy; CARTO' }).addTo(mapa);
 
   function carregar(){
     if(geoJsonCache){
@@ -509,9 +509,89 @@ function destacarMapaPorBusca(termoNorm){
   }catch(e){}
 }
 
+let mapaPendenteInit = false;
+
+function tentarInicializarMapa(){
+  var view = document.getElementById("consulta-telefones-view");
+  var mapaEl = document.getElementById("consulta-mapa");
+  var leafletCont = document.getElementById("mapa-leaflet");
+  if(!view || view.classList.contains("hidden")) return false;
+  if(!mapaEl || mapaEl.offsetParent===null) return false;
+  // already has leaflet?
+  if(mapaLeaflet && leafletCont && leafletCont.offsetHeight>40) {
+    try{ mapaLeaflet.invalidateSize(); if(camadaGeoJson) mapaLeaflet.fitBounds(camadaGeoJson.getBounds(), {padding:[14,14]}); }catch(e){}
+    return true;
+  }
+  if(leafletCont && leafletCont.offsetHeight>40){
+    try{ initMapaLeaflet("mapa-leaflet", false); mapaPendenteInit=false; return true; }catch(e){ return false; }
+  }
+  // container not yet sized -> retry
+  mapaPendenteInit = true;
+  return false;
+}
+
+// observer: when consulta view becomes visible, init
+try{
+  if(typeof MutationObserver!=="undefined"){
+    var obs = new MutationObserver(function(muts){
+      muts.forEach(function(m){
+        if(m.target.id==="consulta-telefones-view" && !m.target.classList.contains("hidden")){
+          setTimeout(tentarInicializarMapa, 80);
+          setTimeout(tentarInicializarMapa, 400);
+        }
+      });
+    });
+    // attach after DOM ready
+    setTimeout(function(){
+      var v=document.getElementById("consulta-telefones-view");
+      if(v) obs.observe(v, {attributes:true, attributeFilter:["class"]});
+    }, 900);
+    // also hook mostrarView if exists
+    (function(){
+      var orig = window.mostrarView;
+      if(typeof orig==="function"){
+        window.mostrarView = function(id){
+          var r = orig.apply(this, arguments);
+          if(id==="consulta-telefones-view") setTimeout(tentarInicializarMapa, 120);
+          return r;
+        };
+      }
+    })();
+  }
+}catch(eObs){}
+
+
 function renderizarMapaConsulta(){
   var mapaEl = document.getElementById("consulta-mapa");
   if(!mapaEl) return;
+  // if view hidden, defer — will be retried by observer / mostrarView
+  var view = document.getElementById("consulta-telefones-view");
+  if(view && view.classList.contains("hidden")){
+    mapaPendenteInit = true;
+    // ainda monta shell para quando abrir
+    mapaEl.innerHTML =
+    '<div class="mapa-panel mapa-premium">' +
+      '<div class="mapa-header">' +
+        '<div>' +
+          '<h3>Mapa Interativo</h3>' +
+          '<p>Clique em um munic\u00edpio para filtrar comarcas e setores. Passe o mouse para ver detalhes.</p>' +
+        '</div>' +
+        '<div style="display:flex;gap:8px;flex-wrap:wrap;">' +
+          '<button type="button" class="btn btn-secondary" style="padding:6px 10px;font-size:12px;" onclick="resetarMapaLeaflet()">\u21ba Redefinir</button>' +
+          '<button type="button" class="btn btn-secondary" style="padding:6px 10px;font-size:12px;" onclick="abrirMapaConsulta()">\u26f6 Ampliar</button>' +
+        '</div>' +
+      '</div>' +
+      '<div id="mapa-leaflet"></div>' +
+      '<div class="mapa-legenda">' +
+        '<span class="mapa-legenda-item"><span class="mapa-legenda-cor" style="background:#e2e8f0"></span> Sem setor</span>' +
+        '<span class="mapa-legenda-item"><span class="mapa-legenda-cor" style="background:#bfdbfe"></span> 1\u20133 setores</span>' +
+        '<span class="mapa-legenda-item"><span class="mapa-legenda-cor" style="background:#60a5fa"></span> 4\u20137 setores</span>' +
+        '<span class="mapa-legenda-item"><span class="mapa-legenda-cor" style="background:#1d63b8"></span> 8+ setores</span>' +
+        '<span class="mapa-legenda-item"><span class="mapa-legenda-cor" style="background:#00adb5"></span> Selecionado / hover</span>' +
+      '</div>' +
+    '</div>';
+    return;
+  }
   mapaEl.innerHTML =
     '<div class="mapa-panel mapa-premium">' +
       '<div class="mapa-header">' +
