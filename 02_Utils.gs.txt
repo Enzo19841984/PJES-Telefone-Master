@@ -278,6 +278,27 @@ function arraySeguro(valor) {
 /**
  * Pausa controlada.
  */
+
+/**
+ * Gera senha aleatória de 20 caracteres (A-Z, a-z, 0-9).
+ */
+function gerarSenha20(){
+  var chars="ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+  var out="";
+  for(var i=0;i<20;i++) out+= chars.charAt(Math.floor(Math.random()*chars.length));
+  return out;
+}
+
+function hashSenha(senha){
+  // SHA-256 hex — suficiente para comparação; não armazena plain em log
+  try{
+    var digest = Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, String(senha||""), Utilities.Charset.UTF_8);
+    var hex="";
+    for(var i=0;i<digest.length;i++){ var b=digest[i]; if(b<0) b+=256; hex += ("0"+b.toString(16)).slice(-2); }
+    return hex;
+  }catch(e){ return String(senha||""); }
+}
+
 function esperar(milissegundos) {
   Utilities.sleep(Number(milissegundos) || 0);
 }

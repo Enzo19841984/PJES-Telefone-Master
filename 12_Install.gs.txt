@@ -202,11 +202,17 @@ function criarAbaUsuarios(
         "NOME",
         "PERFIL",
         "ATIVO",
-        "COMARCAS"
+        "COMARCAS",
+        "SENHA"
       ]
     );
 
   garantirColunaComarcasUsuarios(
+    spreadsheet,
+    sheet
+  );
+
+  garantirColunaSenhaUsuarios(
     spreadsheet,
     sheet
   );
@@ -245,6 +251,16 @@ function garantirColunaComarcasUsuarios(
     .getRange(1, Math.max(ultimaColuna, 1) + 1)
     .setValue("COMARCAS");
 
+  return sheet;
+}
+
+function garantirColunaSenhaUsuarios(spreadsheet, sheet){
+  var headers = DB.headers(sheet);
+  var tem = headers.some(function(h){ return normalizarChave(h)==="SENHA"; });
+  if(tem) return sheet;
+  var ultima = sheet.getLastColumn();
+  sheet.insertColumns(Math.max(ultima,1)+1, 1);
+  sheet.getRange(1, Math.max(ultima,1)+1).setValue("SENHA");
   return sheet;
 }
 

@@ -673,6 +673,57 @@ function listarSolicitacoes() {
  * institucional. Justificativa e comarca são opcionais
  * para manter compatibilidade com chamadas antigas.
  */
+function autenticarConsulta(dados){
+  try{
+    var entrada = ehObjeto(dados)?dados:{};
+    var email = normalizarEmail(valorObjeto(entrada, "email", "EMAIL"));
+    var senha = textoSeguro(valorObjeto(entrada, "senha", "SENHA", "password"));
+    if(!emailValidoAPI(email)) throw new Error("Informe um e-mail válido.");
+    if(!senha) throw new Error("Informe a senha.");
+    var sheet = DB.usuarios();
+    var mapa = DB.map(sheet);
+    var idxEmail = mapa.EMAIL;
+    var idxNome = mapa.NOME;
+    var idxPerfil = mapa.PERFIL;
+    var idxAtivo = mapa.ATIVO;
+    var idxSenha = mapa.SENHA;
+    var idxComarcas = mapa.COMARCAS;
+    var dadosU = sheet.getDataRange().getValues();
+    var headers = DB.headers(sheet);
+    // garante coluna SENHA se faltar
+    if(idxSenha===undefined){
+      try{ var ssTmp2=DB.getSpreadsheet(); garantirColunaSenhaUsuarios(ssTmp2, sheet); mapa=DB.map(sheet); idxSenha=mapa.SENHA; headers=DB.headers(sheet);}catch(e){}
+    }
+    var encontrado = null;
+    for(var i=1;i<dadosU.length;i++){
+      var emailLin = idxEmail!==undefined ? normalizarEmail(dadosU[i][idxEmail-1]) : normalizarEmail(dadosU[i][0]);
+      if(emailLin===email){
+        var senhaPlan = idxSenha!==undefined ? textoSeguro(dadosU[i][idxSenha-1]) : "";
+        if(senhaPlan !== senha){
+          throw new Error("Senha incorreta.");
+        }
+        var perfilLin = idxPerfil!==undefined ? String(dadosU[i][idxPerfil-1]||"").trim().toUpperCase() : "";
+        var ativoLin = idxAtivo!==undefined ? paraBoolean(dadosU[i][idxAtivo-1]) : false;
+        var nomeLin = idxNome!==undefined ? textoSeguro(dadosU[i][idxNome-1]) : "";
+        var comarcasLin = idxComarcas!==undefined ? parseComarcas(dadosU[i][idxComarcas-1]) : [];
+        if(ativoLin && perfilLin!==CONFIG.PERFIS.USUARIO_CONSULTA){
+          throw new Error("Este e-mail possui acesso administrativo. Use o botão Acesso Administrativo (Google).");
+        }
+        if(!ativoLin){
+          throw new Error("Usuário inativo. Procure o Gestor do Sistema.");
+        }
+        encontrado = { email: email, nome: nomeLin || email.split("@")[0], perfil: CONFIG.PERFIS.USUARIO_CONSULTA, ativo: true, comarcas: comarcasLin };
+        break;
+      }
+    }
+    if(!encontrado) throw new Error("E-mail não cadastrado. Preencha o Formulário de Acesso para receber sua senha.");
+    return respostaSucesso(encontrado);
+  }catch(erro){
+    registrarErroAPI("AUTENTICAR_CONSULTA", erro);
+    return respostaErro(erro);
+  }
+}
+
 function solicitarAcesso(nome, perfil, justificativa, comarca) {
   const lock =
     LockService.getScriptLock();
@@ -735,7 +786,8 @@ function solicitarAcesso(nome, perfil, justificativa, comarca) {
 
     if (
       perfilSolicitado !== CONFIG.PERFIS.GESTOR_CONTEUDO &&
-      perfilSolicitado !== CONFIG.PERFIS.GESTOR_SISTEMA
+      perfilSolicitado !== CONFIG.PERFIS.GESTOR_SISTEMA &&
+      perfilSolicitado !== CONFIG.PERFIS.USUARIO_CONSULTA
     ) {
       throw new Error(
         "Perfil solicitado inválido."
@@ -914,19 +966,41 @@ function enviarFormularioAcesso(dados) {
       );
     }
 
-    if (comarca.length < 2) {
+    if (
+      perfilSolicitado !== CONFIG.PERFIS.GESTOR_CONTEUDO &&
+      perfilSolicitado !== CONFIG.PERFIS.GESTOR_SISTEMA &&
+      perfilSolicitado !== CONFIG.PERFIS.USUARIO_CONSULTA
+    ) {
       throw new Error(
-        "Informe a comarca em que você trabalha."
+        "Perfil solicitado inválido."
       );
     }
 
-    if (
-      comarca.length >
-      CONFIG.LIMITES.TAMANHO_MAXIMO_NOME
-    ) {
-      throw new Error(
-        "A comarca informada é muito grande."
-      );
+    // Consulta: comarca/justificativa podem vir vazias (não barra)
+    if (perfilSolicitado !== CONFIG.PERFIS.USUARIO_CONSULTA) {
+      if (comarca.length < 2) {
+        throw new Error(
+          "Informe a comarca em que você trabalha."
+        );
+      }
+      if (
+        comarca.length >
+        CONFIG.LIMITES.TAMANHO_MAXIMO_NOME
+      ) {
+        throw new Error(
+          "A comarca informada é muito grande."
+        );
+      }
+      if (justificativa.length < 10) {
+        throw new Error(
+          "Descreva a justificativa (mínimo de 10 caracteres)."
+        );
+      }
+    } else {
+      // Consulta: se comarca vier, valida tamanho
+      if (comarca && comarca.length > CONFIG.LIMITES.TAMANHO_MAXIMO_NOME) {
+        throw new Error("A comarca informada é muito grande.");
+      }
     }
 
     if (!emailValidoAPI(email)) {
@@ -944,27 +1018,77 @@ function enviarFormularioAcesso(dados) {
     }
 
     if (
-      perfilSolicitado !== CONFIG.PERFIS.GESTOR_CONTEUDO &&
-      perfilSolicitado !== CONFIG.PERFIS.GESTOR_SISTEMA
-    ) {
-      throw new Error(
-        "Perfil solicitado inválido."
-      );
-    }
-
-    if (justificativa.length < 10) {
-      throw new Error(
-        "Descreva a justificativa (mínimo de 10 caracteres)."
-      );
-    }
-
-    if (
       justificativa.length >
       CONFIG.LIMITES.TAMANHO_MAXIMO_OBSERVACAO
     ) {
       throw new Error(
         "A justificativa é muito longa."
       );
+    }
+
+    // --- USUARIO_CONSULTA: geração imediata de senha 20 ---
+    if (perfilSolicitado === CONFIG.PERFIS.USUARIO_CONSULTA) {
+      // Para consulta, comarca/justificativa não são obrigatórias — usa o que veio
+      var senhaGerada = gerarSenha20();
+      var sheetUsuarios = DB.usuarios();
+      var mapaU = DB.map(sheetUsuarios);
+      var idxEmailU = mapaU.EMAIL;
+      var idxNomeU = mapaU.NOME;
+      var idxPerfilU = mapaU.PERFIL;
+      var idxAtivoU = mapaU.ATIVO;
+      var idxComarcasU = mapaU.COMARCAS;
+      var idxSenhaU = mapaU.SENHA;
+      // Garante coluna SENHA se ainda não existir (migração ao vivo)
+      if (idxSenhaU === undefined) {
+        try{
+          var ssTmp = DB.getSpreadsheet();
+          garantirColunaSenhaUsuarios(ssTmp, sheetUsuarios);
+          mapaU = DB.map(sheetUsuarios);
+          idxSenhaU = mapaU.SENHA;
+        }catch(eMig){}
+      }
+      var dadosU = sheetUsuarios.getDataRange().getValues();
+      var headersU = DB.headers(sheetUsuarios);
+      var widthU = headersU.length;
+      var linhaExistente = -1;
+      for (var i=1; i<dadosU.length; i++){
+        var emailLin = idxEmailU!==undefined ? normalizarEmail(dadosU[i][idxEmailU-1]) : normalizarEmail(dadosU[i][0]);
+        if (emailLin === email){ linhaExistente = i+1; break; }
+      }
+      if (linhaExistente !== -1) {
+        var perfilExistente = idxPerfilU!==undefined ? String(dadosU[linhaExistente-1][idxPerfilU-1]||"").trim().toUpperCase() : "";
+        if (perfilExistente === CONFIG.PERFIS.GESTOR_SISTEMA || perfilExistente === CONFIG.PERFIS.GESTOR_CONTEUDO) {
+          throw new Error("Este e-mail já possui acesso administrativo ("+perfilExistente+"). Use o Acesso Administrativo via Google.");
+        }
+        if (idxNomeU!==undefined) sheetUsuarios.getRange(linhaExistente, idxNomeU).setValue(nome);
+        if (idxPerfilU!==undefined) sheetUsuarios.getRange(linhaExistente, idxPerfilU).setValue(CONFIG.PERFIS.USUARIO_CONSULTA);
+        if (idxAtivoU!==undefined) sheetUsuarios.getRange(linhaExistente, idxAtivoU).setValue("SIM");
+        if (idxComarcasU!==undefined) sheetUsuarios.getRange(linhaExistente, idxComarcasU).setValue(comarca||"");
+        if (idxSenhaU!==undefined) sheetUsuarios.getRange(linhaExistente, idxSenhaU).setValue(senhaGerada);
+      } else {
+        var novaLinha = new Array(widthU).fill("");
+        if (idxEmailU!==undefined) novaLinha[idxEmailU-1]=email;
+        if (idxNomeU!==undefined) novaLinha[idxNomeU-1]=nome;
+        if (idxPerfilU!==undefined) novaLinha[idxPerfilU-1]=CONFIG.PERFIS.USUARIO_CONSULTA;
+        if (idxAtivoU!==undefined) novaLinha[idxAtivoU-1]="SIM";
+        if (idxComarcasU!==undefined) novaLinha[idxComarcasU-1]=comarca||"";
+        if (idxSenhaU!==undefined) novaLinha[idxSenhaU-1]=senhaGerada;
+        // fallback se mapa incompleto
+        if (novaLinha.every(function(v){ return !v; })) {
+          sheetUsuarios.appendRow([email, nome, CONFIG.PERFIS.USUARIO_CONSULTA, "SIM", comarca||"", senhaGerada]);
+        } else {
+          sheetUsuarios.appendRow(novaLinha);
+        }
+      }
+      SpreadsheetApp.flush();
+      // E-mail com senha
+      try{
+        var assuntoSenha = "Sua senha de acesso — Sistema de Telefones PJES";
+        var corpoSenha = "Olá "+nome+",\n\nSua senha de acesso ao Sistema Inteligente de Gestão de Telefones do PJES foi gerada:\n\nSenha: "+senhaGerada+"\n\nAnote sua senha de acesso. Também foi enviada ao e-mail institucional.\nUse seu e-mail ("+email+") e esta senha na tela de Login para acessar o sistema.\n\nAtenciosamente,\nTJES — Sistema de Telefones";
+        adicionarEmailPendente(email, assuntoSenha, corpoSenha);
+      }catch(eMailSenha){ registrarErroAPI("EMAIL_SENHA_CONSULTA", eMailSenha); }
+      registrarInfoAPI("FORMULARIO_CONSULTA_SENHA", "Senha gerada para consulta: "+email);
+      return respostaSucesso({ senha: senhaGerada, email: email });
     }
 
     const sheet =

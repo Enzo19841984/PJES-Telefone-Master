@@ -297,8 +297,8 @@ Arquivo: FormularioAcesso.html
     <div class="fa-head">
       <h2>🔑 Solicitação de Acesso</h2>
       <p>
-        Solicite acesso como <strong>Gestor de Conteúdo</strong> (comarcas específicas) ou
-        <strong>Gestor do Sistema</strong> (acesso total). Já é Gestor de Conteúdo? Use aqui para pedir mais comarcas ou promoção.
+        <strong>Gestor</strong>: solicite Gestor de Conteúdo ou Gestor do Sistema (acima).<br>
+        <strong>Visitante (Usuário de Consulta)</strong>: selecione <em>Usuário de Consulta</em> para receber sua senha de 20 caracteres por e-mail e liberar a consulta com login.
       </p>
     </div>
 
@@ -327,6 +327,7 @@ Arquivo: FormularioAcesso.html
         <div class="fa-field fa-full">
           <label for="acesso-perfil"><span class="fa-ic">🎖️</span> Perfil solicitado *</label>
           <select id="acesso-perfil" required>
+            <option value="USUARIO_CONSULTA">Usuário de Consulta — consulta com login e senha (20 caracteres)</option>
             <option value="GESTOR_CONTEUDO">Gestor de Conteúdo — edita telefones das comarcas selecionadas</option>
             <option value="GESTOR_SISTEMA">Gestor do Sistema — acesso total (promoção)</option>
           </select>
@@ -622,7 +623,8 @@ function aplicarEstadoFormularioPorPerfil() {
       emailEl.style.color = "#475569";
     }
     if (hint) {
-      if (perfil === "GESTOR_SISTEMA") hint.textContent = "Você pedirá promoção a Gestor do Sistema (acesso total).";
+      if (perfil === "USUARIO_CONSULTA") hint.textContent = "Você receberá uma senha de 20 caracteres por e-mail para fazer login como consulta.";
+      else if (perfil === "GESTOR_SISTEMA") hint.textContent = "Você pedirá promoção a Gestor do Sistema (acesso total).";
       else hint.textContent = "Você pedirá acesso a mais comarcas como Gestor de Conteúdo.";
       hint.style.color = "#64748b";
     }
@@ -680,11 +682,21 @@ function enviarFormularioAcesso() {
     return;
   }
 
-  if (!validarComarcasFormulario()) {
-    exibirMensagemFormularioAcesso("Selecione ao menos uma comarca na lista.", "error");
-    return;
+  // Validação por perfil
+  if (perfil === "USUARIO_CONSULTA") {
+    // Consulta: comarca/justificativa opcionais
+    comarca = obterComarcasSelecionadasFormulario().trim();
+  } else {
+    if (!validarComarcasFormulario()) {
+      exibirMensagemFormularioAcesso("Selecione ao menos uma comarca na lista.", "error");
+      return;
+    }
+    comarca = obterComarcasSelecionadasFormulario().trim();
+    if (justificativa.length < 10) {
+      exibirMensagemFormularioAcesso("Descreva a justificativa (mínimo de 10 caracteres).", "error");
+      return;
+    }
   }
-  comarca = obterComarcasSelecionadasFormulario().trim();
 
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
     exibirMensagemFormularioAcesso("Informe um e-mail válido.", "error");
@@ -696,13 +708,8 @@ function enviarFormularioAcesso() {
     return;
   }
 
-  if (perfil !== "GESTOR_CONTEUDO" && perfil !== "GESTOR_SISTEMA") {
+  if (perfil !== "GESTOR_CONTEUDO" && perfil !== "GESTOR_SISTEMA" && perfil !== "USUARIO_CONSULTA") {
     exibirMensagemFormularioAcesso("Selecione o perfil solicitado.", "error");
-    return;
-  }
-
-  if (justificativa.length < 10) {
-    exibirMensagemFormularioAcesso("Descreva a justificativa (mínimo de 10 caracteres).", "error");
     return;
   }
 
@@ -719,7 +726,20 @@ function enviarFormularioAcesso() {
     function(resposta) {
       if (botao) { botao.disabled = false; botao.textContent = "Enviar solicitação →"; }
       if (resposta && resposta.sucesso === true) {
-        // Não limpa nome/email se GC (mantém bloqueado)
+        // Consulta: resposta contém senha -> nova página
+        if (resposta.dados && resposta.dados.senha) {
+          var senhaResp = String(resposta.dados.senha||"");
+          var emailResp = String(resposta.dados.email||email);
+          try{ if(typeof exibirSenhaGerada==="function") exibirSenhaGerada(senhaResp, emailResp); }catch(e){}
+          try{ mostrarView('senha-gerada-view'); }catch(e2){}
+          if (typeof mostrarToast === "function") mostrarToast("Senha gerada! Anote e use no Login.", "success");
+          // limpa comarcas/justificativa mas mantém nome/email até ir ao login
+          faComarcasSelecionadas = {};
+          if (window._faAtualizarBotaoComarcas) window._faAtualizarBotaoComarcas();
+          if (justEl) justEl.value = "";
+          return;
+        }
+        // Gestor: fluxo normal
         if (!ehGC) {
           if (nomeEl) nomeEl.value = "";
           if (emailEl) emailEl.value = "";
