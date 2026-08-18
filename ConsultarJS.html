@@ -9,6 +9,16 @@
 const URL_MAPA_ES =
   "https://www.educacaonamao.com.br/wp-content/uploads/2019/11/mapa-districao-regioes-espirito-santo-596x1024.jpg";
 
+const URL_GEOJSON_ES =
+  "https://raw.githubusercontent.com/tbrugz/geodata-br/master/geojson/geojs-32-mun.json";
+
+let mapaLeaflet = null;
+let mapaLeafletOverlay = null;
+let camadaGeoJson = null;
+let camadaGeoJsonOverlay = null;
+let geoJsonCache = null;
+let municipioSelecionado = "";
+
 /* ==========================================================
  * INICIALIZAÇÃO
  * ========================================================== */
@@ -294,188 +304,292 @@ function blocoContato(
 }
 
 /* ==========================================================
- * MAPA NORMAL
+ * MAPA PREMIUM — Leaflet interativo (Visitante)
  * ========================================================== */
 
-function renderizarMapaConsulta() {
-  const mapa =
-    document.getElementById(
-      "consulta-mapa"
-    );
-
-  if (!mapa) return;
-
-  mapa.innerHTML =
-    '<div class="mapa-panel">' +
-
-      '<div class="mapa-header">' +
-
-        '<div>' +
-          '<h3>Mapa do Espírito Santo</h3>' +
-          '<p>' +
-            'Selecione uma comarca e um setor na lista para navegar pelos contatos.' +
-          '</p>' +
-        '</div>' +
-
-        '<button ' +
-          'type="button" ' +
-          'class="btn-mapa" ' +
-          'onclick="abrirMapaConsulta()">' +
-          'Abrir mapa' +
-        '</button>' +
-
-      '</div>' +
-
-      '<div class="mapa-area">' +
-        '<img ' +
-          'src="' + URL_MAPA_ES + '" ' +
-          'alt="Mapa das regiões e comarcas do Espírito Santo">' +
-      '</div>' +
-
-    '</div>';
+function obterDensidadeComarca(nomeComarca){
+  var lista = (typeof setoresPorComarca!=="undefined" && setoresPorComarca[nomeComarca]) ? setoresPorComarca[nomeComarca] : [];
+  return Array.isArray(lista) ? lista.length : 0;
 }
 
-/* ==========================================================
- * MAPA AMPLIADO
- * ========================================================== */
-
-function criarMapaOverlay() {
-  let overlay =
-    document.getElementById(
-      "mapa-overlay"
-    );
-
-  if (overlay) {
-    return overlay;
+function municipioParaComarca(nomeMunicipio){
+  var norm = normalizarTexto(nomeMunicipio||"");
+  if(!norm) return "";
+  if(typeof ordemComarcas!=="undefined"){
+    for(var i=0;i<ordemComarcas.length;i++){
+      if(normalizarTexto(ordemComarcas[i])===norm) return ordemComarcas[i];
+    }
+    for(var j=0;j<ordemComarcas.length;j++){
+      var cn = normalizarTexto(ordemComarcas[j]);
+      if(norm.indexOf(cn)!==-1 || cn.indexOf(norm)!==-1) return ordemComarcas[j];
+    }
   }
+  return "";
+}
 
-  overlay =
-    document.createElement("div");
+function corPorDensidade(dens){
+  if(!dens || dens===0) return "#e2e8f0";
+  if(dens<=3) return "#bfdbfe";
+  if(dens<=7) return "#60a5fa";
+  return "#1d63b8";
+}
 
-  overlay.id =
-    "mapa-overlay";
+function estiloMunicipio(feature){
+  var nome = String(feature.properties.name||feature.properties.NOME||"").trim();
+  var comarca = municipioParaComarca(nome);
+  var dens = comarca ? obterDensidadeComarca(comarca) : 0;
+  var isSel = municipioSelecionado && normalizarTexto(nome)===normalizarTexto(municipioSelecionado);
+  return {
+    fillColor: isSel ? "#00adb5" : corPorDensidade(dens),
+    fillOpacity: dens===0 ? 0.35 : 0.6,
+    color: isSel ? "#0f172a" : "#ffffff",
+    weight: isSel ? 2.2 : 1.2,
+    opacity: 1
+  };
+}
 
-  overlay.className =
-    "mapa-overlay";
-
-  overlay.innerHTML =
-    '<div class="mapa-overlay-painel">' +
-
-      '<div class="mapa-overlay-header">' +
-
-        '<h3>Mapa do Espírito Santo</h3>' +
-
-        '<button ' +
-          'type="button" ' +
-          'class="btn btn-secondary" ' +
-          'onclick="fecharMapaConsulta()">' +
-          '← Voltar à consulta' +
-        '</button>' +
-
-      '</div>' +
-
-      '<div class="mapa-overlay-area">' +
-
-        '<img ' +
-          'src="' +
-          URL_MAPA_ES +
-          '" ' +
-          'alt="Mapa das regiões e comarcas do Espírito Santo">' +
-
-      '</div>' +
-
-    '</div>';
-
-  overlay.addEventListener(
-    "click",
-    evento => {
-      if (
-        evento.target === overlay
-      ) {
-        fecharMapaConsulta();
+function aoClicarMunicipio(nomeMunicipio, feature, layer){
+  municipioSelecionado = String(nomeMunicipio||"").trim();
+  var comarca = municipioParaComarca(nomeMunicipio);
+  var compNome = comarca || nomeMunicipio;
+  var micro = "";
+  try{
+    if(comarca && typeof microrregioesPorComarca!=="undefined") micro = String(microrregioesPorComarca[comarca]||"").trim();
+    if(!micro && typeof comarcasPorMicrorregiao!=="undefined"){
+      for(var k in comarcasPorMicrorregiao){
+        if((comarcasPorMicrorregiao[k]||[]).indexOf(compNome)!==-1){ micro=k; break; }
       }
     }
-  );
+  }catch(e){}
+  if(micro && typeof selecionarMicrorregiaoConsulta==="function"){
+    var sel = document.getElementById("filtro-microrregiao-consulta");
+    if(sel) sel.value = micro;
+    selecionarMicrorregiaoConsulta(micro);
+  }
+  try{
+    var id = (typeof chaveSegura==="function") ? chaveSegura(compNome) : String(compNome).replace(/[^a-zA-Z0-9]/g,"_");
+    var sec = document.getElementById("setores-"+id);
+    if(sec && sec.classList.contains("hidden")) sec.classList.remove("hidden");
+    var alvos = document.querySelectorAll(".comarca-item");
+    alvos.forEach(function(el){
+      var isTarget = el.querySelector(".comarca-nome") && normalizarTexto(el.querySelector(".comarca-nome").textContent)===normalizarTexto(compNome);
+      el.style.outline = isTarget ? "2px solid #00adb5" : "";
+      el.style.outlineOffset = isTarget ? "2px" : "";
+      if(isTarget) el.scrollIntoView({behavior:"smooth", block:"nearest"});
+    });
+    setTimeout(function(){
+      if(typeof camadaGeoJson!=="undefined" && camadaGeoJson && camadaGeoJson.resetStyle) {
+        camadaGeoJson.eachLayer(function(l){ if(l.feature) camadaGeoJson.resetStyle(l); });
+        if(layer) layer.setStyle({fillColor:"#00adb5", fillOpacity:0.82, color:"#0f172a", weight:2.4});
+      }
+    },80);
+  }catch(e2){}
+  try{
+    var listaSetores = (typeof setoresPorComarca!=="undefined" && setoresPorComarca[compNome]) ? setoresPorComarca[compNome] : [];
+    if(listaSetores && listaSetores.length===1 && typeof selecionarSetor==="function"){
+      var unico = listaSetores[0];
+      var idSeg = (typeof chaveSegura==="function") ? chaveSegura(compNome) : compNome;
+      var chave = compNome + "||" + unico;
+      selecionarSetor({currentTarget: document.querySelector('#setores-'+idSeg+' .setor-item')}, idSeg, unico, chave);
+    }
+  }catch(e3){}
+}
 
-  document.body.appendChild(
-    overlay
-  );
+function construirTooltipMunicipio(nomeMunicipio){
+  var comarca = municipioParaComarca(nomeMunicipio);
+  var dens = comarca ? obterDensidadeComarca(comarca) : 0;
+  var micro = "";
+  try{ if(comarca && typeof microrregioesPorComarca!=="undefined") micro = String(microrregioesPorComarca[comarca]||"").trim(); }catch(e){}
+  var linha2 = comarca ? (dens+" setor"+(dens===1?"":"es")+(micro?" \u00b7 "+micro:"")) : (micro||"Munic\u00edpio \u2014 sem comarca direta");
+  return '<div class="tooltip-premium">'+ escaparConsulta(nomeMunicipio) + '<small>'+ escaparConsulta(linha2) +'</small></div>';
+}
 
+function initMapaLeaflet(containerId, isOverlay){
+  var cont = document.getElementById(containerId);
+  if(!cont) return null;
+  if(typeof L==="undefined"){
+    cont.innerHTML = '<div style="padding:24px;text-align:center;color:#64748b;font-size:13px;">Carregando mapa\u2026 <br><small>Leaflet n\u00e3o carregou \u2014 verifique conex\u00e3o.</small></div>';
+    setTimeout(function(){ if(typeof L!=="undefined") initMapaLeaflet(containerId, isOverlay); }, 1200);
+    return null;
+  }
+  var mapa = L.map(containerId, { zoomControl:true, attributionControl:true }).setView([-19.5, -40.3], 8);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 18, attribution: '&copy; OpenStreetMap' }).addTo(mapa);
+
+  function carregar(){
+    if(geoJsonCache){
+      desenhar(geoJsonCache);
+      return;
+    }
+    fetch(URL_GEOJSON_ES)
+      .then(function(r){ if(!r.ok) throw new Error("HTTP "+r.status); return r.json(); })
+      .then(function(data){ geoJsonCache = data; desenhar(data); })
+      .catch(function(err){
+        console.error("GeoJSON ES falhou", err);
+        cont.insertAdjacentHTML("beforeend", '<div style="margin-top:10px;padding:10px 12px;background:#fef2f2;border:1px solid #fecaca;border-radius:8px;color:#991b1b;font-size:12px;">N\u00e3o foi poss\u00edvel carregar o mapa vetorial. <button type="button" class="btn btn-secondary" style="margin-left:8px;padding:4px 8px;font-size:11px;" onclick="initMapaLeaflet(\''+containerId+'\','+(isOverlay?'true':'false')+')">Tentar novamente</button><br><small style="color:#b45309">Exibindo mapa ilustrativo.</small></div>');
+        var fallback = document.createElement("img");
+        fallback.src = URL_MAPA_ES;
+        fallback.alt = "Mapa do Esp\u00edrito Santo";
+        fallback.style.cssText = "width:100%;max-height:360px;object-fit:contain;margin-top:10px;border-radius:10px;border:1px solid #e2e8f0;";
+        cont.appendChild(fallback);
+      });
+  }
+
+  function desenhar(data){
+    var layer = L.geoJSON(data, {
+      style: estiloMunicipio,
+      onEachFeature: function(feature, lyr){
+        var nome = String(feature.properties.name||feature.properties.NOME||"").trim();
+        lyr.bindTooltip(construirTooltipMunicipio(nome), { permanent:false, direction:"auto", className:"tooltip-premium", sticky:true });
+        lyr.on({
+          mouseover: function(e){
+            var t = e.target;
+            if(normalizarTexto(municipioSelecionado)!==normalizarTexto(nome)){
+              t.setStyle({ fillColor:"#00adb5", fillOpacity:0.78, weight:2.2, color:"#0f172a" });
+              t.bringToFront();
+            }
+          },
+          mouseout: function(e){
+            if(normalizarTexto(municipioSelecionado)===normalizarTexto(nome)){
+              e.target.setStyle({fillColor:"#00adb5", fillOpacity:0.85, weight:2.4, color:"#0f172a"});
+            } else {
+              var parent = isOverlay ? camadaGeoJsonOverlay : camadaGeoJson;
+              if(parent) parent.resetStyle(e.target);
+            }
+          },
+          click: function(e){
+            L.DomEvent.stopPropagation(e);
+            aoClicarMunicipio(nome, feature, e.target);
+          }
+        });
+      }
+    }).addTo(mapa);
+    if(isOverlay) camadaGeoJsonOverlay = layer; else camadaGeoJson = layer;
+    try{ mapa.fitBounds(layer.getBounds(), {padding:[14,14]}); }catch(e2){}
+    setTimeout(function(){ try{ mapa.invalidateSize(); }catch(e){} }, 180);
+    layer.eachLayer(function(l){
+      l._nomeNorm = normalizarTexto(String(l.feature.properties.name||"").trim());
+    });
+  }
+
+  carregar();
+  if(isOverlay) mapaLeafletOverlay = mapa; else mapaLeaflet = mapa;
+  return mapa;
+}
+
+function resetarMapaLeaflet(){
+  try{
+    if(mapaLeaflet && camadaGeoJson){
+      municipioSelecionado = "";
+      camadaGeoJson.eachLayer(function(l){ camadaGeoJson.resetStyle(l); });
+      mapaLeaflet.fitBounds(camadaGeoJson.getBounds(), {padding:[14,14]});
+      document.querySelectorAll(".comarca-item").forEach(function(el){ el.style.outline=""; });
+    }
+  }catch(e){}
+}
+
+function destacarMapaPorBusca(termoNorm){
+  try{
+    var parent = camadaGeoJson;
+    if(!parent) return;
+    if(!termoNorm){
+      parent.eachLayer(function(l){ parent.resetStyle(l); l.setStyle({opacity:1, fillOpacity: l.feature? estiloMunicipio(l.feature).fillOpacity : 0.5}); });
+      return;
+    }
+    parent.eachLayer(function(l){
+      var nome = l._nomeNorm || normalizarTexto(String(l.feature.properties.name||""));
+      var comarca = normalizarTexto(municipioParaComarca(String(l.feature.properties.name||"")));
+      var match = nome.indexOf(termoNorm)!==-1 || comarca.indexOf(termoNorm)!==-1;
+      if(match){
+        l.setStyle({opacity:1, fillOpacity:0.75});
+        l.bringToFront();
+      } else {
+        l.setStyle({opacity:0.45, fillOpacity:0.18});
+      }
+    });
+  }catch(e){}
+}
+
+function renderizarMapaConsulta(){
+  var mapaEl = document.getElementById("consulta-mapa");
+  if(!mapaEl) return;
+  mapaEl.innerHTML =
+    '<div class="mapa-panel mapa-premium">' +
+      '<div class="mapa-header">' +
+        '<div>' +
+          '<h3>Mapa Interativo</h3>' +
+          '<p>Clique em um munic\u00edpio para filtrar comarcas e setores. Passe o mouse para ver detalhes.</p>' +
+        '</div>' +
+        '<div style="display:flex;gap:8px;flex-wrap:wrap;">' +
+          '<button type="button" class="btn btn-secondary" style="padding:6px 10px;font-size:12px;" onclick="resetarMapaLeaflet()">\u21ba Redefinir</button>' +
+          '<button type="button" class="btn btn-secondary" style="padding:6px 10px;font-size:12px;" onclick="abrirMapaConsulta()">\u26f6 Ampliar</button>' +
+        '</div>' +
+      '</div>' +
+      '<div id="mapa-leaflet"></div>' +
+      '<div class="mapa-legenda">' +
+        '<span class="mapa-legenda-item"><span class="mapa-legenda-cor" style="background:#e2e8f0"></span> Sem setor</span>' +
+        '<span class="mapa-legenda-item"><span class="mapa-legenda-cor" style="background:#bfdbfe"></span> 1\u20133 setores</span>' +
+        '<span class="mapa-legenda-item"><span class="mapa-legenda-cor" style="background:#60a5fa"></span> 4\u20137 setores</span>' +
+        '<span class="mapa-legenda-item"><span class="mapa-legenda-cor" style="background:#1d63b8"></span> 8+ setores</span>' +
+        '<span class="mapa-legenda-item"><span class="mapa-legenda-cor" style="background:#00adb5"></span> Selecionado / hover</span>' +
+      '</div>' +
+    '</div>';
+  setTimeout(function(){ initMapaLeaflet("mapa-leaflet", false); }, 80);
+}
+
+function criarMapaOverlay(){
+  var overlay = document.getElementById("mapa-overlay");
+  if(overlay) return overlay;
+  overlay = document.createElement("div");
+  overlay.id = "mapa-overlay";
+  overlay.className = "mapa-overlay";
+  overlay.innerHTML =
+    '<div class="mapa-overlay-painel">' +
+      '<div class="mapa-overlay-header">' +
+        '<h3>Mapa Interativo \u2014 Esp\u00edrito Santo</h3>' +
+        '<button type="button" class="btn btn-secondary" onclick="fecharMapaConsulta()">\u2190 Voltar \u00e0 consulta</button>' +
+      '</div>' +
+      '<div class="mapa-overlay-area"><div id="mapa-leaflet-overlay"></div></div>' +
+    '</div>';
+  overlay.addEventListener("click", function(evento){
+    if(evento.target===overlay) fecharMapaConsulta();
+  });
+  document.body.appendChild(overlay);
   return overlay;
 }
 
-function abrirMapaConsulta() {
-  const overlay = criarMapaOverlay();
-
-  if (!overlay) {
-    console.error("Não foi possível criar o mapa.");
-    return;
-  }
-
+function abrirMapaConsulta(){
+  var overlay = criarMapaOverlay();
+  if(!overlay){ console.error("N\u00e3o foi poss\u00edvel criar o mapa."); return; }
   overlay.classList.add("ativo");
   document.body.classList.add("mapa-aberto");
-
-  const btnImprimir =
-    document.getElementById(
-      "btn-imprimir-consulta"
-    );
-
-  if (btnImprimir) {
-    btnImprimir.style.display = "none";
-  }
-}
-
-function fecharMapaConsulta() {
-  const overlay =
-    document.getElementById(
-      "mapa-overlay"
-    );
-
-  if (overlay) {
-    overlay.classList.remove(
-      "ativo"
-    );
-  }
-
-  document.body.classList.remove(
-    "mapa-aberto"
-  );
-
-  const detalhes =
-    document.getElementById(
-      "consulta-detalhes-conteudo"
-    );
-
-  const btnImprimir =
-    document.getElementById(
-      "btn-imprimir-consulta"
-    );
-
-  if (btnImprimir) {
-    const detalhesVisiveis =
-      detalhes &&
-      getComputedStyle(detalhes).display !== "none";
-
-    btnImprimir.style.display =
-      detalhesVisiveis
-        ? "inline-flex"
-        : "none";
-  }
-}
-
-document.addEventListener(
-  "keydown",
-  evento => {
-    if (
-      evento.key === "Escape" &&
-      document.body.classList.contains(
-        "mapa-aberto"
-      )
-    ) {
-      fecharMapaConsulta();
+  var btnImp = document.getElementById("btn-imprimir-consulta");
+  if(btnImp) btnImp.style.display="none";
+  setTimeout(function(){
+    if(!mapaLeafletOverlay){
+      initMapaLeaflet("mapa-leaflet-overlay", true);
+    } else {
+      try{ mapaLeafletOverlay.invalidateSize(); if(camadaGeoJsonOverlay) mapaLeafletOverlay.fitBounds(camadaGeoJsonOverlay.getBounds(), {padding:[14,14]}); }catch(e){}
     }
+  }, 120);
+}
+
+function fecharMapaConsulta(){
+  var overlay = document.getElementById("mapa-overlay");
+  if(overlay) overlay.classList.remove("ativo");
+  document.body.classList.remove("mapa-aberto");
+  var detalhes = document.getElementById("consulta-detalhes-conteudo");
+  var btnImp = document.getElementById("btn-imprimir-consulta");
+  if(btnImp){
+    var vis = detalhes && getComputedStyle(detalhes).display!=="none";
+    btnImp.style.display = vis ? "inline-flex" : "none";
   }
-);
+  setTimeout(function(){ try{ if(mapaLeaflet) mapaLeaflet.invalidateSize(); }catch(e){} }, 120);
+}
+
+document.addEventListener("keydown", function(evento){
+  if(evento.key==="Escape" && document.body.classList.contains("mapa-aberto")) fecharMapaConsulta();
+});
+
 
 /* ==========================================================
  * DETALHES
@@ -759,6 +873,8 @@ function filtrarSetoresConsulta() {
         );
       }
     );
+  try{ destacarMapaPorBusca(normalizarTexto(campo?.value||"")); }catch(e){}
+
 }
 
 /* ==========================================================

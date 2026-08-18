@@ -318,6 +318,7 @@ function renderizarComarcas() {
   if (termo) {
     filtrarSetoresConsulta();
   }
+  try{ destacarMapaPorBusca(normalizarTexto(termo)); }catch(e){}
 }
 
 function toggleComarca(id) {
