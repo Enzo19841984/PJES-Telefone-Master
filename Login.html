@@ -92,7 +92,7 @@ function fazerLoginConsulta(){
   limparMensagemLogin();
   var email = String(document.getElementById("login-email")?.value || "").trim().toLowerCase();
   var senha = String(document.getElementById("login-senha")?.value || "").trim();
-  if(!/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email)){
+  if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)){
     exibirMensagemLogin("Informe um e-mail válido.", "error"); return;
   }
   if(!email.endsWith("@tjes.jus.br")){

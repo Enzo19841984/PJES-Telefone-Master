@@ -482,12 +482,25 @@ function construirPickerComarcas() {
   btnLimpar.className = "btn btn-secondary";
   btnLimpar.textContent = "Limpar";
   btnLimpar.style.cssText = "padding:6px 10px;font-size:12px;";
+  var btnTodas = document.createElement("button");
+  btnTodas.type = "button";
+  btnTodas.className = "btn btn-secondary";
+  btnTodas.textContent = "Selecionar todas";
+  btnTodas.style.cssText = "padding:6px 10px;font-size:12px;";
+  btnTodas.addEventListener("click", function(){
+    comarcasFormulario.forEach(function(nome){ faComarcasSelecionadas[normalizarComarca(nome)] = nome; });
+    renderListaComarcas(); atualizarBotaoComarcas();
+  });
   var btnOk = document.createElement("button");
   btnOk.type = "button";
   btnOk.className = "btn btn-primary";
   btnOk.textContent = "OK";
   btnOk.style.cssText = "padding:6px 14px;font-size:12px;";
-  rodape.appendChild(btnLimpar);
+  var grupoEsq = document.createElement("div");
+  grupoEsq.style.cssText = "display:flex;gap:6px;align-items:center;";
+  grupoEsq.appendChild(btnLimpar);
+  grupoEsq.appendChild(btnTodas);
+  rodape.appendChild(grupoEsq);
   rodape.appendChild(btnOk);
 
   painel.appendChild(busca);
