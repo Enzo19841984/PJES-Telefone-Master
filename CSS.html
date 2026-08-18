@@ -478,19 +478,23 @@ body{
 /* ==========================================================
    MAPA INTERATIVO — VISITANTE (Leaflet premium)
    ========================================================== */
-#consulta-mapa{min-height:0}
-.mapa-premium{padding:16px}
-.mapa-premium .mapa-header{margin-bottom:14px}
+#consulta-mapa{min-height:0;height:100%;display:flex;flex-direction:column}
+.mapa-premium{
+  flex:1;min-height:0;
+  display:flex;flex-direction:column;
+  padding:16px;overflow:hidden;
+}
+.mapa-premium .mapa-header{margin-bottom:14px;flex:none}
 #mapa-leaflet{
-  width:100%;
-  height:420px;
-  min-height:320px;
+  flex:1;min-height:360px;
+  width:100%;height:auto;
   border-radius:12px;
   border:1px solid #e2e8f0;
   overflow:hidden;
   box-shadow:0 4px 14px rgba(15,23,42,.08);
   background:#eef2f7;
 }
+.mapa-premium .mapa-legenda{flex:none}
 .mapa-premium .mapa-legenda{
   display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center;
   margin-top:10px;font-size:11px;color:#475569;
@@ -1182,7 +1186,8 @@ body{
   grid-template-columns:minmax(340px,38%) minmax(0,1fr);
   gap:16px;
   height:calc(100vh - 185px);
-  min-height:520px
+  min-height:520px;
+  align-items:stretch
 }
 
 .consulta-esquerda{
@@ -1245,7 +1250,10 @@ body{
 .consulta-detalhes{
   min-width:0;
   min-height:0;
-  height:100%
+  height:100%;
+  display:flex;
+  flex-direction:column;
+  overflow:hidden
 }
 
 #consulta-mapa{

@@ -465,7 +465,7 @@ function initMapaLeaflet(containerId, isOverlay){
     }).addTo(mapa);
     if(isOverlay) camadaGeoJsonOverlay = layer; else camadaGeoJson = layer;
     try{ mapa.fitBounds(layer.getBounds(), {padding:[14,14]}); }catch(e2){}
-    setTimeout(function(){ try{ mapa.invalidateSize(); }catch(e){} }, 180);
+    setTimeout(function(){ try{ mapa.invalidateSize(); if(!isOverlay) { mapa.fitBounds(layer.getBounds(), {padding:[14,14]}); } }catch(e){} }, 220);
     layer.eachLayer(function(l){
       l._nomeNorm = normalizarTexto(String(l.feature.properties.name||"").trim());
     });
@@ -560,6 +560,16 @@ try{
   }
 }catch(eObs){}
 
+
+
+// Keep leaflet covering whole container on resize
+try{
+  var _mapaResizeObs = new ResizeObserver(function(){ try{ if(mapaLeaflet) mapaLeaflet.invalidateSize(); }catch(e){} });
+  setTimeout(function(){
+    var c=document.getElementById("consulta-mapa");
+    if(c) _mapaResizeObs.observe(c);
+  }, 1500);
+}catch(eRO){}
 
 function renderizarMapaConsulta(){
   var mapaEl = document.getElementById("consulta-mapa");
