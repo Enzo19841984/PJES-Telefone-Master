@@ -516,14 +516,17 @@ function abrirJanelaImpressao(titulo, colunas, linhas){
 }
 
 function linhasDeTelefones(lista){
+  function pick(it, keys){ for(var i=0;i<keys.length;i++){ var k=keys[i]; if(it[k]!=null && String(it[k]).trim()!=="") return it[k]; } return ""; }
   return (Array.isArray(lista)?lista:[]).map(function(it){
     return [
       it.comarca||it.COMARCA||"-",
       it.setor||it.SETOR||"-",
       it.tipo||it.TIPO||"-",
-      it.telefone||it.TELEFONE||it.numero||"-",
+      it.telefone||it.TELEFONE||it.numero||pick(it,["numero","NUMERO"])||"-",
       it.ramal||it.RAMAL||"-",
-      it.whatsapp||it.WHATSAPP||"-"
+      it.whatsapp||it.WHATSAPP||"-",
+      pick(it,["eMail","e_mail","email","E-mail","EMAIL","E_MAIL"])||"-",
+      pick(it,["endereco","Endereco","ENDERECO","endereço","Endereço"])||"-"
     ];
   });
 }
@@ -531,7 +534,7 @@ function linhasDeTelefones(lista){
 function imprimirTodosNumeros(){
   var dados = (typeof listaTelefones!=="undefined" && Array.isArray(listaTelefones)) ? listaTelefones : ((typeof todosTelefones!=="undefined"&&Array.isArray(todosTelefones))?todosTelefones:[]);
   // aplica apenas escopo (já vem filtrado do servidor), mas ignora filtros de tela
-  abrirJanelaImpressao("Telefones — Todos os números", ["Comarca","Setor","Tipo","Telefone","Ramal","WhatsApp"], linhasDeTelefones(dados));
+  abrirJanelaImpressao("Telefones — Todos os números", ["Comarca","Setor","Tipo","Telefone","Ramal","WhatsApp","E-mail","Endereço"], linhasDeTelefones(dados));
 }
 
 function imprimirEstaPagina(){
@@ -545,7 +548,7 @@ function imprimirEstaPagina(){
     }
   } catch(e){ dados = (typeof listaTelefones!=="undefined"?listaTelefones:[]); }
   // se paginação existir, pega só o que está renderizado ( fallback: tudo filtrado )
-  abrirJanelaImpressao("Telefones — Página atual", ["Comarca","Setor","Tipo","Telefone","Ramal","WhatsApp"], linhasDeTelefones(dados));
+  abrirJanelaImpressao("Telefones — Página atual", ["Comarca","Setor","Tipo","Telefone","Ramal","WhatsApp","E-mail","Endereço"], linhasDeTelefones(dados));
 }
 
 </script>

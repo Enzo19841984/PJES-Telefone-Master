@@ -681,8 +681,8 @@ function renderizarTabela(
 
     td.colSpan =
       mostrarAcoes
-        ? 7
-        : 6;
+        ? 9
+        : 8;
 
     td.textContent =
       "Nenhum telefone encontrado.";
@@ -819,6 +819,18 @@ function renderizarTabela(
         whatsapp
       )
     );
+
+    // E-mail + Endereco (gestor)
+    const email = textoTabela(
+      valorCampoTelefone(item, "eMail", "e_mail", "email", "E-mail", "EMAIL", "E_MAIL")
+    );
+    const endereco = textoTabela(
+      valorCampoTelefone(item, "endereco", "Endereco", "ENDERECO", "endereço", "Endereço")
+    );
+    tr.appendChild(criarCelulaTexto(email, "left"));
+    (function(){ var tdE=tr.lastChild; if(tdE){ tdE.style.maxWidth="180px"; tdE.style.wordBreak="break-word"; tdE.style.fontSize="12px"; } })();
+    tr.appendChild(criarCelulaTexto(endereco, "left"));
+    (function(){ var tdEnd=tr.lastChild; if(tdEnd){ tdEnd.style.maxWidth="220px"; tdEnd.style.wordBreak="break-word"; tdEnd.style.fontSize="12px"; } })();
 
     if (mostrarAcoes) {
       const tdAcoes =
