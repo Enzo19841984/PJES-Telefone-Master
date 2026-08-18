@@ -34,8 +34,8 @@ Arquivo: Login.html — Login do Usuário de Consulta (e-mail + senha 20)
 <div class="lg-wrap">
   <div class="lg-card">
     <div class="lg-head">
-      <h2>Login — Usuário de Consulta</h2>
-      <p>Entre com seu e-mail institucional e a senha de 20 caracteres que você recebeu após preencher o formulário.</p>
+      <h2>Login</h2>
+      <p>Entre com seu e-mail institucional e sua senha de 20 caracteres.<br><small style="opacity:.85">Se seu acesso ainda não foi aprovado, verá: <em>Acesso em andamento. Quando sua conta for aprovada você conseguirá entrar.</em></small></p>
     </div>
     <div class="lg-body">
       <div class="lg-field">
@@ -73,10 +73,11 @@ function exibirMensagemLogin(msg, tipo){
   var el = document.getElementById("login-mensagem");
   if(!el) return;
   var ok = tipo === "success";
+  var warn = tipo === "warning";
   el.textContent = (ok ? "✅ " : "⚠️ ") + String(msg||"");
-  el.style.background = ok ? "#dcfce7" : "#fee2e2";
-  el.style.border = "1px solid " + (ok ? "#bbf7d0" : "#fecaca");
-  el.style.color = ok ? "#166534" : "#991b1b";
+  if(ok){ el.style.background="#dcfce7"; el.style.border="1px solid #bbf7d0"; el.style.color="#166534"; }
+  else if(warn){ el.style.background="#fef9c3"; el.style.border="1px solid #fde68a"; el.style.color="#854d0e"; }
+  else { el.style.background="#fee2e2"; el.style.border="1px solid #fecaca"; el.style.color="#991b1b"; }
   el.classList.remove("hidden");
 }
 
@@ -112,18 +113,22 @@ function fazerLoginConsulta(){
         try{
           localStorage.setItem("pjes_consulta_sessao", JSON.stringify({ email: resp.dados.email, nome: resp.dados.nome, perfil: resp.dados.perfil, comarcas: resp.dados.comarcas||[], ts: Date.now() }));
         }catch(e){}
-        usuarioAtual = { nome: resp.dados.nome || email.split("@")[0], email: resp.dados.email, perfil: "USUARIO_CONSULTA", logado: true, ativo: true, comarcas: Array.isArray(resp.dados.comarcas)?resp.dados.comarcas:[], viaConsulta:true };
+        usuarioAtual = { nome: resp.dados.nome || email.split("@")[0], email: resp.dados.email, perfil: resp.dados.perfil || "GESTOR_CONTEUDO", logado: true, ativo: true, comarcas: Array.isArray(resp.dados.comarcas)?resp.dados.comarcas:[], viaConsulta:true };
         try{ atualizarInterfaceUsuario(); }catch(e){}
         exibirMensagemLogin("Login realizado! Bem-vindo, " + (resp.dados.nome||"") + ".", "success");
         if(typeof mostrarToast==="function") mostrarToast("Login realizado!", "success");
-        setTimeout(function(){ try{ mostrarView('consulta-telefones-view'); }catch(e){} }, 600);
+        setTimeout(function(){ try{ var p=(resp.dados.perfil||"").toUpperCase(); mostrarView(p==="GESTOR_SISTEMA" || p==="GESTOR_CONTEUDO" ? 'telefones-view' : 'consulta-telefones-view'); }catch(e){} }, 600);
       } else {
-        exibirMensagemLogin((resp&&resp.erro)||"E-mail ou senha incorretos.", "error");
+        var msg = (resp&&resp.erro)||"E-mail ou senha incorretos.";
+        var isPending = String(msg).indexOf("Acesso em andamento")!==-1;
+        exibirMensagemLogin(msg, isPending ? "warning" : "error");
       }
     },
     function(err){
       if(btn){ btn.disabled=false; btn.textContent="Entrar →"; }
-      exibirMensagemLogin((err&&err.message)||"Falha de comunicação.", "error");
+      var msg2 = (err&&err.message)||"Falha de comunicação.";
+      var isPending2 = String(msg2).indexOf("Acesso em andamento")!==-1;
+      exibirMensagemLogin(msg2, isPending2 ? "warning" : "error");
     }
   );
 }

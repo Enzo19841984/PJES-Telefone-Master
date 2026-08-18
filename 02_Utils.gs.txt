@@ -283,7 +283,7 @@ function arraySeguro(valor) {
  * Gera senha aleatória de 20 caracteres (A-Z, a-z, 0-9).
  */
 function gerarSenha20(){
-  var chars="ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+  var chars="ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
   var out="";
   for(var i=0;i<20;i++) out+= chars.charAt(Math.floor(Math.random()*chars.length));
   return out;
