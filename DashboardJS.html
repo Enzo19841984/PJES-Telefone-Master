@@ -506,38 +506,33 @@ function renderizarResumoDashboard(
 }
 
 /* ==========================================================
- * IMPRESSÃO — Visitante / Consulta
+ * IMPRESSÃO — Dashboard (cards + gráficos) e Comarca
  * ========================================================== */
-function imprimirTodasComarcas(){
-  return imprimirDashboard();
-}
-function imprimirDashboard(){
+function imprimirTodasComarcas(){ return imprimirDashboardView(); }
+function imprimirDashboard(){ return imprimirDashboardView(); }
+function imprimirDashboardView(){
   try{
-    var src = (typeof todosTelefones!=="undefined" && Array.isArray(todosTelefones)) ? todosTelefones : [];
-    var lista = [];
-    function pick(it, keys){ for(var i=0;i<keys.length;i++){ var k=keys[i]; if(it[k]!=null && String(it[k]).trim()!=="") return it[k]; } return ""; }
-    (Array.isArray(src)?src:[]).forEach(function(it){
-      lista.push([
-        String(it.comarca||it.COMARCA||"").trim()||"-",
-        String(it.setor||it.SETOR||"").trim()||"-",
-        String(it.tipo||it.TIPO||"").trim()||"-",
-        String(it.telefone||it.TELEFONE||pick(it,["numero","NUMERO"])||"").trim()||"-",
-        String(it.ramal||it.RAMAL||"").trim()||"-",
-        String(it.whatsapp||it.WHATSAPP||"").trim()||"-",
-        String(pick(it,["eMail","e_mail","email","E-mail","EMAIL","E_MAIL"])||"").trim()||"-",
-        String(pick(it,["endereco","Endereco","ENDERECO","endere\u00e7o","Endere\u00e7o"])||"").trim()||"-"
-      ]);
-    });
-    if(!lista.length) lista = [["-","-","-","-","-","-","-","-"]];
-    var esc=function(s){ return String(s==null?"":s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); };
-    var w = window.open("","_blank");
-    if(!w){ if(typeof mostrarToast==="function") mostrarToast("Desbloqueie pop-ups para imprimir.","warning"); return; }
-    var css="body{font-family:Arial,Helvetica,sans-serif;color:#0f172a;margin:22px;} h1{font-size:18px;margin:0 0 2px;} .sub{color:#64748b;font-size:12px;margin-bottom:14px;} table{width:100%;border-collapse:collapse;font-size:10px;} th{background:#f1f5f9;text-align:left;padding:6px 7px;border:1px solid #cbd5e1;font-weight:700;color:#334155;white-space:nowrap;} td{padding:6px 7px;border:1px solid #e2e8f0;vertical-align:top;word-break:break-word;} tr:nth-child(even) td{background:#f8fafc;} @media print{ @page{size:A4 landscape;margin:10mm;} body{margin:0;} }";
-    var tit="Dashboard \u2014 Telefones"; var thead="<tr><th>Comarca</th><th>Setor</th><th>Tipo</th><th>Telefone</th><th>Ramal</th><th>WhatsApp</th><th>E-mail</th><th>Endere\u00e7o</th></tr>";
-    var tbody=lista.map(function(r){ return "<tr>"+r.map(function(v){return "<td>"+esc(v)+"</td>";}).join("")+"</tr>"; }).join("");
-    var html="<!DOCTYPE html><html><head><meta charset='utf-8'><title>"+esc(tit)+"</title><style>"+css+"</style></head><body><h1>"+esc(tit)+"</h1><div class='sub'>"+new Date().toLocaleString('pt-BR')+" \u00b7 "+lista.length+" registros</div><table><thead>"+thead+"</thead><tbody>"+tbody+"</tbody></table><script>window.onload=function(){ setTimeout(function(){ window.print(); },350); }<\/script></body></html>";
-    w.document.open(); w.document.write(html); w.document.close();
-  }catch(e){ console.error(e); if(typeof mostrarToast==="function") mostrarToast("N\u00e3o foi poss\u00edvel imprimir.","error"); }
+    var view = document.getElementById("dashboard-view");
+    if(!view || view.classList.contains("hidden")){
+      if(typeof mostrarView==="function"){ mostrarView("dashboard-view"); }
+      setTimeout(function(){ imprimirDashboardView(); }, 220);
+      return;
+    }
+    var tituloOriginal = document.title;
+    var tituloInterface = "";
+    try{ var el=document.querySelector(".system-title h1"); tituloInterface = el ? el.textContent.replace(/\s+/g," ").trim() : ""; }catch(e){}
+    if(!tituloInterface) tituloInterface = "SISTEMA INTELIGENTE DE GESTÃO DE TELEFONES DO PJES";
+    document.title = tituloInterface + " \u2014 Dashboard";
+    document.body.classList.add("print-dashboard");
+    function limpar(){
+      document.title = tituloOriginal;
+      document.body.classList.remove("print-dashboard");
+      try{ window.removeEventListener("afterprint", limpar); }catch(e){}
+    }
+    window.addEventListener("afterprint", limpar, {once:true});
+    setTimeout(function(){ try{ if(document.body.classList.contains("print-dashboard")) limpar(); }catch(e){} }, 5000);
+    window.print();
+  }catch(e){ console.error(e); if(typeof mostrarToast==="function") mostrarToast("N\u00e3o foi poss\u00edvel imprimir o dashboard.","error"); }
 }
 
 function imprimirTodosSetoresDaComarca(comarcaNome){
@@ -549,13 +544,12 @@ function imprimirTodosSetoresDaComarca(comarcaNome){
     var linhas = [];
     if(setores && setores.length){
       setores.forEach(function(s){
-        var chave = nome + "||" + s;
+        var chave = nome + "||{ " + s;
         var regs = (typeof telefonesPorSetor!=="undefined" && telefonesPorSetor[chave]) ? telefonesPorSetor[chave] : [];
         var g = (typeof agruparContatosDoSetor==="function") ? agruparContatosDoSetor(regs) : {telefones:[],ramais:[],whatsapps:[],emails:[],enderecos:[]};
         linhas.push([s, (g.telefones||[]).join(", ")||"-", (g.ramais||[]).join(", ")||"-", (g.whatsapps||[]).join(", ")||"-", (g.emails||[]).join(", ")||"-", (g.enderecos||[]).join(", ")||"-"]);
       });
     } else {
-      // fallback: filtra src
       var mapa={};
       src.filter(function(it){ return String(it.comarca||it.COMARCA||"").trim()===nome; }).forEach(function(it){
         var s=String(it.setor||it.SETOR||"").trim()||"Sem setor";
@@ -565,20 +559,22 @@ function imprimirTodosSetoresDaComarca(comarcaNome){
         if(it.whatsapp||it.WHATSAPP) mapa[s].w.push(it.whatsapp||it.WHATSAPP);
       });
       Object.keys(mapa).sort(function(a,b){return a.localeCompare(b,"pt-BR");}).forEach(function(s){
-        linhas.push([s, mapa[s].t.join(", ")||"-", mapa[s].r.join(", ")||"-", mapa[s].w.join(", ")||"-", "-", "-"]);
+        linhas.push([s, mapa[s].t.join(", ")||"-", mapa[s].r.join(", ")||"-", mapa[s].w.join(", ")||"-", "-","-"]);
       });
       if(!linhas.length) linhas.push(["-","-","-","-","-","-"]);
     }
     var w = window.open("","_blank");
     if(!w){ mostrarToast("Desbloqueie pop-ups para imprimir.","warning"); return; }
-    var esc=function(s){ return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); };
+    var esc=function(s){ return String(s).replace(/&/g,"& }amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); };
     var css="body{font-family:Arial,Helvetica,sans-serif;color:#0f172a;margin:24px;} h1{font-size:18px;margin:0 0 2px;} .sub{color:#64748b;font-size:12px;margin-bottom:14px;} table{width:100%;border-collapse:collapse;font-size:11px;} th{background:#f1f5f9;text-align:left;padding:7px;border:1px solid #cbd5e1;} td{padding:6px 7px;border:1px solid #e2e8f0;vertical-align:top;} @media print{ @page{size:A4 landscape;margin:12mm;} }";
-    var tit="Comarca "+nome+" — Todos os setores";
-    var thead="<tr><th>Setor</th><th>Telefone</th><th>Ramal</th><th>WhatsApp</th><th>E-mail</th><th>Endereço</th></tr>";
+    var tit="Comarca "+nome+" \u2014 Todos os setores";
+    var thead="<tr><th>Setor</th><th>Telefone</th><th>Ramal</th><th>WhatsApp</th><th>E-mail</th><th>Endere\u00e7o</th></tr>";
     var tbody=linhas.map(function(r){ return "<tr>"+r.map(function(v){return "<td>"+esc(v)+"</td>";}).join("")+"</tr>"; }).join("");
-    var html="<!DOCTYPE html><html><head><meta charset='utf-8'><title>"+esc(tit)+"</title><style>"+css+"</style></head><body><h1>"+esc(tit)+"</h1><div class='sub'>"+new Date().toLocaleString('pt-BR')+" · "+linhas.length+" setores</div><table><thead>"+thead+"</thead><tbody>"+tbody+"</tbody></table><script>window.onload=function(){ setTimeout(function(){ window.print(); },350); }<\/script></body></html>";
+    var html="<!DOCTYPE html><html><head><meta charset='utf-8'><title>"+esc(tit)+"</title><style>"+css+"</style></head><body><h1>"+esc(tit)+"</h1><div class='sub'>"+new Date().toLocaleString('pt-BR')+" \u00b7 "+linhas.length+" setores</div><table><thead>"+thead+"</thead><tbody>"+tbody+"</tbody></table><script>window.onload=function(){ setTimeout(function(){ window.print(); },350); }<\/script></body></html>";
     w.document.open(); w.document.write(html); w.document.close();
-  }catch(e){ console.error(e); mostrarToast("Não foi possível imprimir.","error"); }
+  }catch(e){ console.error(e); mostrarToast("N\u00e3o foi poss\u00edvel imprimir.","error"); }
 }
+
+
 
 </script>

@@ -12,14 +12,28 @@ class ValidationService {
     this.validarCamposObrigatorios(registro);
 
     const numero = textoSeguro(valorObjeto(registro, "numero", "Numero"));
-
     const ramal = textoSeguro(valorObjeto(registro, "ramal", "Ramal"));
-
     const whatsapp = textoSeguro(valorObjeto(registro, "whatsapp", "Whatsapp", "WhatsApp"));
-
-    if (!numero && !ramal && !whatsapp) {
-      throw new Error("Informe ao menos um meio de contato: Telefone, Ramal ou WhatsApp.");
+    const emailC = textoSeguro(valorObjeto(registro, "email", "E_MAIL", "E-mail", "EMAIL"));
+    const tipo = textoSeguro(valorObjeto(registro, "tipo", "Tipo"));
+    // Single contact enforcement
+    var preenchidos = [numero, ramal, whatsapp, emailC].filter(function(v){ return String(v||"").trim()!==""; });
+    if (preenchidos.length === 0) {
+      throw new Error("Informe ao menos um meio de contato: Telefone, Ramal, WhatsApp ou E-mail.");
     }
+    if (preenchidos.length > 1) {
+      throw new Error("Informe apenas um tipo de contato por vez.");
+    }
+    // Valida consistência Tipo vs campo preenchido
+    if (tipo) {
+      var tipoNorm = tipo.trim().toLowerCase();
+      if (tipoNorm==="telefone" && !numero) throw new Error("Tipo Telefone selecionado, mas telefone não preenchido.");
+      if (tipoNorm==="ramal" && !ramal) throw new Error("Tipo Ramal selecionado, mas ramal não preenchido.");
+      if (tipoNorm==="whatsapp" && !whatsapp) throw new Error("Tipo WhatsApp selecionado, mas WhatsApp não preenchido.");
+      if (tipoNorm==="e-mail" && !emailC) throw new Error("Tipo E-mail selecionado, mas e-mail não preenchido.");
+      if (tipoNorm==="email" && !emailC) throw new Error("Tipo E-mail selecionado, mas e-mail não preenchido.");
+    }
+    if (emailC) this.validarEmail(emailC);
 
     this.validarNumero(numero);
     this.validarRamal(ramal);
@@ -89,7 +103,7 @@ class ValidationService {
 
   validarCamposObrigatorios(dados) {
     const regras = [{campo: "microrregiao", nome: "Microrregião"}, {campo: "comarca", nome: "Comarca"},
-      {campo: "setor", nome: "Setor"}
+      {campo: "setor", nome: "Setor"}, {campo: "tipo", nome: "Tipo"}
     ];
 
     const faltantes = [];

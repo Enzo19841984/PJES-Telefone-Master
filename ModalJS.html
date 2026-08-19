@@ -8,6 +8,149 @@
 
 let telefoneEditando = null;
 
+function normalizarChaveModal(v){ return String(v||"").normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/[^a-zA-Z0-9]/g,"").toUpperCase(); }
+function preencherSelectModal(id, valores, placeholder){
+  var sel=document.getElementById(id); if(!sel) return;
+  var atual=sel.value;
+  sel.textContent="";
+  var opt0=document.createElement("option"); opt0.value=""; opt0.textContent=placeholder||"Selecione"; sel.appendChild(opt0);
+  Array.from(valores||[]).sort(function(a,b){return String(a).localeCompare(String(b),"pt-BR");}).forEach(function(v){
+    var o=document.createElement("option"); o.value=String(v); o.textContent=String(v); sel.appendChild(o);
+  });
+  // restore if still valid
+  var opts=Array.from(sel.options).map(function(o){return o.value;});
+  if(atual && opts.indexOf(atual)!==-1) sel.value=atual;
+}
+function obterMicrorregioesModal(){
+  var set=new Set();
+  var allowed = (typeof comarcasPermitidasDoUsuario==="function") ? comarcasPermitidasDoUsuario() : null;
+  var src = (typeof todosTelefones!=="undefined" && Array.isArray(todosTelefones)) ? todosTelefones : [];
+  src.forEach(function(it){
+    var micro=String(it.microrregiao||it.Microrregiao||"").trim();
+    var comarca=String(it.comarca||it.Comarca||"").trim();
+    if(!micro) return;
+    if(allowed!==null && comarca){
+      var ck=normalizarChaveModal(comarca);
+      if(allowed.indexOf(ck)===-1) return;
+    }
+    set.add(micro);
+  });
+  // fallback via comarcasPorMicrorregiao
+  if(set.size===0 && typeof comarcasPorMicrorregiao!=="undefined"){
+    Object.keys(comarcasPorMicrorregiao).forEach(function(k){ set.add(k); });
+  }
+  return Array.from(set);
+}
+function obterComarcasModal(micro){
+  var set=new Set();
+  var allowed2 = (typeof comarcasPermitidasDoUsuario==="function") ? comarcasPermitidasDoUsuario() : null;
+  var src2 = (typeof todosTelefones!=="undefined" && Array.isArray(todosTelefones)) ? todosTelefones : [];
+  var filtroMicro = micro ? normalizarChaveModal(micro) : "";
+  src2.forEach(function(it){
+    var m=String(it.microrregiao||it.Microrregiao||"").trim();
+    var c=String(it.comarca||it.Comarca||"").trim();
+    if(!c) return;
+    if(filtroMicro && normalizarChaveModal(m)!==filtroMicro) return;
+    if(allowed2!==null){
+      var ck2=normalizarChaveModal(c);
+      if(allowed2.indexOf(ck2)===-1) return;
+    }
+    set.add(c);
+  });
+  if(set.size===0 && micro && typeof comarcasPorMicrorregiao!=="undefined" && comarcasPorMicrorregiao[micro]){
+    comarcasPorMicrorregiao[micro].forEach(function(c){
+      if(allowed2===null || allowed2.indexOf(normalizarChaveModal(c))!==-1) set.add(c);
+    });
+  }
+  return Array.from(set);
+}
+function obterSetoresModal(micro, comarca){
+  var set=new Set();
+  var src3 = (typeof todosTelefones!=="undefined" && Array.isArray(todosTelefones)) ? todosTelefones : [];
+  var fm = micro ? normalizarChaveModal(micro) : "";
+  var fc = comarca ? normalizarChaveModal(comarca) : "";
+  src3.forEach(function(it){
+    var m=String(it.microrregiao||it.Microrregiao||"").trim();
+    var c=String(it.comarca||it.Comarca||"").trim();
+    var s=String(it.setor||it.Setor||"").trim();
+    if(!s) return;
+    if(fm && normalizarChaveModal(m)!==fm) return;
+    if(fc && normalizarChaveModal(c)!==fc) return;
+    set.add(s);
+  });
+  if(set.size===0 && comarca && typeof setoresPorComarca!=="undefined" && setoresPorComarca[comarca]){
+    setoresPorComarca[comarca].forEach(function(s){ set.add(s); });
+  }
+  return Array.from(set);
+}
+function popularModalMicrorregioes(preservar){
+  var vals=obterMicrorregioesModal();
+  preencherSelectModal("telefone-microrregiao", vals, "Selecione");
+  if(preservar){
+    var sel=document.getElementById("telefone-microrregiao");
+    if(sel){
+      var opts=Array.from(sel.options).map(function(o){return o.value;});
+      if(opts.indexOf(preservar)!==-1) sel.value=preservar;
+      else {
+        var o=document.createElement("option"); o.value=preservar; o.textContent=preservar; sel.appendChild(o); sel.value=preservar;
+      }
+    }
+  }
+}
+function popularModalComarcas(micro, preservar){
+  var vals=obterComarcasModal(micro||"");
+  preencherSelectModal("telefone-comarca", vals, "Selecione");
+  if(preservar){
+    var sel2=document.getElementById("telefone-comarca");
+    if(sel2){
+      var opts2=Array.from(sel2.options).map(function(o){return o.value;});
+      if(opts2.indexOf(preservar)!==-1) sel2.value=preservar;
+      else { var o2=document.createElement("option"); o2.value=preservar; o2.textContent=preservar; sel2.appendChild(o2); sel2.value=preservar; }
+    }
+  }
+}
+function popularModalSetores(micro, comarca, preservar){
+  var vals=obterSetoresModal(micro||"", comarca||"");
+  preencherSelectModal("telefone-setor", vals, "Selecione");
+  if(preservar){
+    var sel3=document.getElementById("telefone-setor");
+    if(sel3){
+      var opts3=Array.from(sel3.options).map(function(o){return o.value;});
+      if(opts3.indexOf(preservar)!==-1) sel3.value=preservar;
+      else { var o3=document.createElement("option"); o3.value=preservar; o3.textContent=preservar; sel3.appendChild(o3); sel3.value=preservar; }
+    }
+  }
+}
+function atualizarVisibilidadeTipo(){
+  var tipoEl=document.getElementById("telefone-tipo");
+  var tipo= tipoEl ? String(tipoEl.value||"").trim() : "";
+  var mapTipo={ "Telefone":"grupo-telefone-numero", "Ramal":"grupo-telefone-ramal", "WhatsApp":"grupo-telefone-whatsapp", "E-mail":"grupo-telefone-email" };
+  Object.keys(mapTipo).forEach(function(k){
+    var gid=mapTipo[k];
+    var el=document.getElementById(gid);
+    if(!el) return;
+    if(k===tipo) el.classList.remove("hidden");
+    else { el.classList.add("hidden"); }
+  });
+  // limpa campos ocultos para garantir single
+  if(tipo!=="Telefone"){ var e1=document.getElementById("telefone-numero"); if(e1) e1.value=""; }
+  if(tipo!=="Ramal"){ var e2=document.getElementById("telefone-ramal"); if(e2) e2.value=""; }
+  if(tipo!=="WhatsApp"){ var e3=document.getElementById("telefone-whatsapp"); if(e3) e3.value=""; }
+  if(tipo!=="E-mail"){ var e4=document.getElementById("telefone-email"); if(e4) e4.value=""; }
+}
+function onModalTipoChange(){ atualizarVisibilidadeTipo(); }
+function onModalMicrorregiaoChange(){
+  var micro=document.getElementById("telefone-microrregiao")?.value||"";
+  popularModalComarcas(micro);
+  popularModalSetores(micro, "");
+  atualizarVisibilidadeTipo();
+}
+function onModalComarcaChange(){
+  var micro=document.getElementById("telefone-microrregiao")?.value||"";
+  var comarca=document.getElementById("telefone-comarca")?.value||"";
+  popularModalSetores(micro, comarca);
+}
+
 function abrirModalNovoTelefone() {
   telefoneEditando = null;
 
@@ -47,6 +190,22 @@ function preencherFormularioTelefone(telefone) {
   if (!telefone) {
     return;
   }
+
+  // Pre-popula cascata antes de setar valores
+  try{
+    var microPre = String((telefone.microrregiao||telefone.Microrregiao||telefone.MICRORREGIAO||"")).trim();
+    var comarcaPre = String((telefone.comarca||telefone.Comarca||telefone.COMARCA||"")).trim();
+    var setorPre = String((telefone.setor||telefone.Setor||telefone.SETOR||"")).trim();
+    var tipoPre = String((telefone.tipo||telefone.Tipo||telefone.TIPO||"")).trim();
+    popularModalMicrorregioes(microPre);
+    popularModalComarcas(microPre, comarcaPre);
+    popularModalSetores(microPre, comarcaPre, setorPre);
+    // tipo visibilidade
+    var tipoSel=document.getElementById("telefone-tipo");
+    if(tipoSel && tipoPre) tipoSel.value=tipoPre;
+    atualizarVisibilidadeTipo();
+    if(tipoSel && tipoPre) tipoSel.value=tipoPre;
+  }catch(ePre){}
 
   const valor = (
     campo,
@@ -171,6 +330,7 @@ function preencherFormularioTelefone(telefone) {
 }
 
 function limparFormularioTelefone() {
+  try{ atualizarVisibilidadeTipo(); }catch(e){}
   const campos = [
     "telefone-id",
     "telefone-microrregiao",
@@ -236,6 +396,18 @@ function obterDadosFormularioTelefone() {
       : valor;
   };
 
+  var tipoSel = limparCampo("telefone-tipo");
+  var rawNumero = limparCampo("telefone-numero");
+  var rawRamal = limparCampo("telefone-ramal");
+  var rawWhatsapp = limparCampo("telefone-whatsapp");
+  var rawEmail = limparCampo("telefone-email");
+  // Single contact enforcement: só mantém o campo do Tipo selecionado
+  var numeroF="", ramalF="", whatsappF="", emailF="";
+  if(tipoSel==="Telefone") numeroF=rawNumero;
+  else if(tipoSel==="Ramal") ramalF=rawRamal;
+  else if(tipoSel==="WhatsApp") whatsappF=rawWhatsapp;
+  else if(tipoSel==="E-mail") emailF=rawEmail;
+
   return {
     ID: idAtual,
     id: idAtual,
@@ -249,20 +421,15 @@ function obterDadosFormularioTelefone() {
     setor:
       limparCampo("telefone-setor"),
 
-    tipo:
-      limparCampo("telefone-tipo"),
+    tipo: tipoSel,
 
-    numero:
-      limparCampo("telefone-numero"),
+    numero: numeroF,
 
-    ramal:
-      limparCampo("telefone-ramal"),
+    ramal: ramalF,
 
-    whatsapp:
-      limparCampo("telefone-whatsapp"),
+    whatsapp: whatsappF,
 
-    email:
-      limparCampo("telefone-email"),
+    email: emailF,
 
     endereco:
       limparCampo("telefone-endereco"),
@@ -365,12 +532,6 @@ function validarFormularioTelefone(
   if (!dados.tipo) {
     faltantes.push(
       "Tipo"
-    );
-  }
-
-  if (!dados.endereco) {
-    faltantes.push(
-      "Endereço"
     );
   }
 
@@ -477,6 +638,8 @@ function atualizarListaLocalTelefone(
       todosTelefones.push(Object.assign({}, registro));
     }
   }
+
+  try{ if(typeof processarDados==="function") processarDados(); }catch(e){}
 
   if (
     typeof carregarFiltros ===

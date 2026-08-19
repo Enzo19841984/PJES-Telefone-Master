@@ -1635,7 +1635,7 @@ body.mapa-aberto{
   }
 
   /* ========================================================
-     CONSULTA DE TELEFONES
+     CONSULTA DE TELEFONES — Detalhe do setor
      ======================================================== */
 
   #consulta-detalhes-conteudo,
@@ -1655,6 +1655,112 @@ body.mapa-aberto{
     padding:0!important;
     background:#fff!important;
     color:#000!important;
+  }
+
+  /* ========================================================
+     DASHBOARD — impressão via botão no topbar (cards + gráficos)
+     ======================================================== */
+
+  body.print-dashboard #dashboard-view,
+  body.print-dashboard #dashboard-view *{
+    visibility:visible!important;
+  }
+
+  body.print-dashboard #dashboard-view{
+    display:block!important;
+    position:absolute!important;
+    top:0!important;
+    left:0!important;
+    width:100%!important;
+    height:auto!important;
+    overflow:visible!important;
+    margin:0!important;
+    padding:0!important;
+    background:#fff!important;
+    color:#000!important;
+  }
+
+  /* Fallback: quando dashboard-view é o único visível, garante impressão também sem body class */
+  #dashboard-view:not(.hidden),
+  #dashboard-view:not(.hidden) *{
+    visibility:visible!important;
+  }
+
+  #dashboard-view:not(.hidden){
+    display:block!important;
+    position:absolute!important;
+    top:0!important;
+    left:0!important;
+    width:100%!important;
+    height:auto!important;
+    overflow:visible!important;
+    margin:0!important;
+    padding:0!important;
+    background:#fff!important;
+    color:#000!important;
+  }
+
+  #dashboard-view:not(.hidden) .dashboard-container{
+    display:block!important;
+    width:100%!important;
+    max-width:100%!important;
+    margin:0!important;
+    padding:0!important;
+  }
+
+  #dashboard-view:not(.hidden) .dashboard-cards{
+    display:grid!important;
+    grid-template-columns:repeat(3,1fr)!important;
+    gap:12px!important;
+    margin:0 0 16px!important;
+    width:100%!important;
+  }
+
+  #dashboard-view:not(.hidden) .dashboard-grid{
+    display:grid!important;
+    grid-template-columns:repeat(2,1fr)!important;
+    gap:16px!important;
+    width:100%!important;
+    margin:0!important;
+  }
+
+  #dashboard-view:not(.hidden) .card,
+  #dashboard-view:not(.hidden) .panel{
+    background:#fff!important;
+    border:1px solid #cbd5e1!important;
+    box-shadow:none!important;
+    break-inside:avoid!important;
+    page-break-inside:avoid!important;
+  }
+
+  body.print-dashboard #dashboard-view .dashboard-container{
+    display:block!important;
+    width:100%!important;
+    max-width:100%!important;
+    margin:0!important;
+    padding:0!important;
+  }
+
+  body.print-dashboard #dashboard-view .dashboard-cards{
+    display:grid!important;
+    grid-template-columns:repeat(3,1fr)!important;
+    gap:12px!important;
+    margin:0 0 16px!important;
+  }
+
+  body.print-dashboard #dashboard-view .dashboard-grid{
+    display:grid!important;
+    grid-template-columns:repeat(2,1fr)!important;
+    gap:16px!important;
+  }
+
+  body.print-dashboard #dashboard-view .card,
+  body.print-dashboard #dashboard-view .panel{
+    background:#fff!important;
+    border:1px solid #cbd5e1!important;
+    box-shadow:none!important;
+    break-inside:avoid!important;
+    page-break-inside:avoid!important;
   }
 
   /* ==========================================================
@@ -1782,7 +1888,14 @@ body.mapa-aberto{
      ELEMENTOS QUE NÃO DEVEM SER IMPRESSOS
      ======================================================== */
 
+  #btn-imprimir-dashboard,
+  #btn-imprimir-consulta-todos,
+  #btn-imprimir-telefones,
+  #btn-imprimir-usuarios,
   #btn-imprimir-consulta,
+  #btn-imprimir-todas-comarcas,
+  #btn-imprimir-todos-numeros,
+  #btn-imprimir-esta-pagina,
   .sidebar,
   #sidebar-container,
   .topbar,
@@ -1937,5 +2050,4 @@ body.mapa-aberto{
     color:#fff!important;
   }
 
-}
-</style>
+}</style>

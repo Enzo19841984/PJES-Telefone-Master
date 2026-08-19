@@ -499,7 +499,7 @@ function erroPadraoSearch(erro) {
 }
 
 /* ==========================================================
- * IMPRESSÃO — Telefones (Gestor)
+ * IMPRESSÃO — Telefones (Gestor/Consulta) e Usuários
  * ========================================================== */
 
 function htmlEscImprimir(v){ return String(v==null?"":v).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;"); }
@@ -511,7 +511,7 @@ function abrirJanelaImpressao(titulo, colunas, linhas){
   var thead = "<tr>" + colunas.map(function(c){ return "<th>"+htmlEscImprimir(c)+"</th>"; }).join("") + "</tr>";
   var tbody = linhas.map(function(r){ return "<tr>" + r.map(function(v){ return "<td>"+htmlEscImprimir(v==null?"":String(v))+"</td>"; }).join("") + "</tr>"; }).join("");
   if(!tbody) tbody = "<tr><td colspan=\""+colunas.length+"\" style=\"text-align:center;color:#94a3b8;padding:18px;\">Nenhum registro para imprimir.</td></tr>";
-  var html = "<!DOCTYPE html><html><head><meta charset='utf-8'><title>"+htmlEscImprimir(titulo)+"</title><style>"+css+"</style></head><body><h1>"+htmlEscImprimir(titulo)+"</h1><div class='sub'>"+htmlEscImprimir(new Date().toLocaleString('pt-BR'))+" · "+linhas.length+" registros</div><table><thead>"+thead+"</thead><tbody>"+tbody+"</tbody></table><script>window.onload=function(){ setTimeout(function(){ window.print(); }, 350); }<\/script></body></html>";
+  var html = "<!DOCTYPE html><html><head><meta charset='utf-8'><title>"+htmlEscImprimir(titulo)+"</title><style>"+css+"</style></head><body><h1>"+htmlEscImprimir(titulo)+"</h1><div class='sub'>"+htmlEscImprimir(new Date().toLocaleString('pt-BR'))+" · "+linhas.length+" registros</div><table><thead>"+thead+"</thead><tbody>"+tbody+"</tbody></table><script>window.onload=function(){ setTimeout(function(){ window.print(); }, 350); }<\\/script></body></html>";
   w.document.open(); w.document.write(html); w.document.close();
 }
 
@@ -526,29 +526,41 @@ function linhasDeTelefones(lista){
       it.ramal||it.RAMAL||"-",
       it.whatsapp||it.WHATSAPP||"-",
       pick(it,["eMail","e_mail","email","E-mail","EMAIL","E_MAIL"])||"-",
-      pick(it,["endereco","Endereco","ENDERECO","endereço","Endereço"])||"-"
+      pick(it,["endereco","Endereco","ENDERECO","endere\u00e7o","Endere\u00e7o"])||"-"
     ];
   });
 }
 
-function imprimirTodosNumeros(){
-  var dados = (typeof listaTelefones!=="undefined" && Array.isArray(listaTelefones)) ? listaTelefones : ((typeof todosTelefones!=="undefined"&&Array.isArray(todosTelefones))?todosTelefones:[]);
-  // aplica apenas escopo (já vem filtrado do servidor), mas ignora filtros de tela
-  abrirJanelaImpressao("Telefones — Todos os números", ["Comarca","Setor","Tipo","Telefone","Ramal","WhatsApp","E-mail","Endereço"], linhasDeTelefones(dados));
-}
-
-function imprimirEstaPagina(){
+function imprimirTelefonesVisiveis(){
   var dados = [];
   try {
-    // tenta respeitar filtros atuais
-    if (typeof aplicarFiltrosLocais==="function" && typeof listaTelefones!=="undefined") {
+    if(typeof aplicarFiltrosLocais==="function" && typeof listaTelefones!=="undefined" && Array.isArray(listaTelefones)){
       dados = aplicarFiltrosLocais(listaTelefones);
-    } else if (typeof listaTelefones!=="undefined") {
+    } else if(typeof listaTelefones!=="undefined" && Array.isArray(listaTelefones)){
+      dados = listaTelefones.slice();
+    } else if(typeof todosTelefones!=="undefined" && Array.isArray(todosTelefones)){
+      dados = todosTelefones.slice();
+    }
+  } catch(e){ try{ dados = (typeof listaTelefones!=="undefined"?listaTelefones:[]).slice(); }catch(e2){ dados=[]; } }
+  if(!Array.isArray(dados)) dados=[];
+  abrirJanelaImpressao("Telefones — Contatos vis\u00edveis", ["Comarca","Setor","Tipo","Telefone","Ramal","WhatsApp","E-mail","Endere\u00e7o"], linhasDeTelefones(dados));
+}
+
+function imprimirConsultaTodosContatos(){
+  var dados = [];
+  try{
+    if(typeof todosTelefones!=="undefined" && Array.isArray(todosTelefones) && todosTelefones.length){
+      dados = todosTelefones;
+    } else if(typeof listaTelefones!=="undefined" && Array.isArray(listaTelefones)){
       dados = listaTelefones;
     }
-  } catch(e){ dados = (typeof listaTelefones!=="undefined"?listaTelefones:[]); }
-  // se paginação existir, pega só o que está renderizado ( fallback: tudo filtrado )
-  abrirJanelaImpressao("Telefones — Página atual", ["Comarca","Setor","Tipo","Telefone","Ramal","WhatsApp","E-mail","Endereço"], linhasDeTelefones(dados));
+  }catch(e){ dados=[]; }
+  if(!Array.isArray(dados)) dados=[];
+  abrirJanelaImpressao("Telefones — Todos os contatos", ["Comarca","Setor","Tipo","Telefone","Ramal","WhatsApp","E-mail","Endere\u00e7o"], linhasDeTelefones(dados));
 }
+
+function imprimirTodosNumeros(){ return imprimirTelefonesVisiveis(); }
+function imprimirEstaPagina(){ return imprimirTelefonesVisiveis(); }
+
 
 </script>

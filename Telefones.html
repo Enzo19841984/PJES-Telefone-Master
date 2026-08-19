@@ -15,12 +15,11 @@ Arquivo: Telefones.html
     </div>
 
     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;justify-content:flex-end;">
-      <button type="button" id="btn-imprimir-todos-numeros" class="btn btn-secondary" onclick="imprimirTodosNumeros()" title="Imprimir todos os números cadastrados">
-        🖨️ Imprimir todos os números
+      <button type="button" id="btn-imprimir-telefones" class="btn btn-secondary" onclick="imprimirTelefonesVisiveis()" title="Imprimir contatos visíveis em PDF" style="display:none;">
+        🖨️ Imprimir/PDF
       </button>
-      <button type="button" id="btn-imprimir-esta-pagina" class="btn btn-secondary" onclick="imprimirEstaPagina()" title="Imprimir apenas a página/filtro atual" style="display:none;">
-        🖨️ Imprimir esta página
-      </button>
+      <button type="button" id="btn-imprimir-todos-numeros" class="hidden" style="display:none;" onclick="imprimirTelefonesVisiveis()" aria-hidden="true" tabindex="-1"></button>
+      <button type="button" id="btn-imprimir-esta-pagina" class="hidden" style="display:none;" onclick="imprimirTelefonesVisiveis()" aria-hidden="true" tabindex="-1"></button>
       <button type="button" id="btn-novo-telefone" class="btn btn-primary" onclick="abrirModalNovoTelefone()">
         + Novo Contato
       </button>

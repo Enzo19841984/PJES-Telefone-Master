@@ -652,8 +652,10 @@ function abrirMapaConsulta(){
   if(!overlay){ console.error("N\u00e3o foi poss\u00edvel criar o mapa."); return; }
   overlay.classList.add("ativo");
   document.body.classList.add("mapa-aberto");
-  var btnImp = document.getElementById("btn-imprimir-consulta");
+  var btnImp = document.getElementById("btn-imprimir-consulta-todos");
   if(btnImp) btnImp.style.display="none";
+  var btnStub = document.getElementById("btn-imprimir-consulta");
+  if(btnStub) btnStub.style.display="none";
   setTimeout(function(){
     if(!mapaLeafletOverlay){
       initMapaLeaflet("mapa-leaflet-overlay", true);
@@ -668,11 +670,13 @@ function fecharMapaConsulta(){
   if(overlay) overlay.classList.remove("ativo");
   document.body.classList.remove("mapa-aberto");
   var detalhes = document.getElementById("consulta-detalhes-conteudo");
-  var btnImp = document.getElementById("btn-imprimir-consulta");
+  var btnImp = document.getElementById("btn-imprimir-consulta-todos");
   if(btnImp){
-    var vis = detalhes && getComputedStyle(detalhes).display!=="none";
-    btnImp.style.display = vis ? "inline-flex" : "none";
+    var isConsulta = !!(document.getElementById("consulta-telefones-view") && !document.getElementById("consulta-telefones-view").classList.contains("hidden"));
+    btnImp.style.display = isConsulta ? "" : "none";
   }
+  var btnStub = document.getElementById("btn-imprimir-consulta");
+  if(btnStub) btnStub.style.display="none";
   setTimeout(function(){ try{ if(mapaLeaflet) mapaLeaflet.invalidateSize(); }catch(e){} }, 120);
 }
 
@@ -749,12 +753,10 @@ function renderizarDetalhes(
 
         '</div>' +
 
-        '<button ' +
-          'type="button" ' +
-          'class="btn btn-secondary" ' +
-          'onclick="mostrarMapaConsulta()">' +
-          'Voltar ao mapa' +
-        '</button>' +
+        '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">' +
+          '<button type="button" class="btn btn-secondary" style="padding:6px 10px;font-size:12px;" onclick="imprimirDetalheSetor()" title="Imprimir este setor em PDF">🖨️ Imprimir/PDF</button>' +
+          '<button type="button" class="btn btn-secondary" onclick="mostrarMapaConsulta()">Voltar ao mapa</button>' +
+        '</div>' +
 
       '</div>' +
 
@@ -806,15 +808,13 @@ function renderizarDetalhes(
   detalhes.style.display =
     "block";
 
-  const btn =
-    document.getElementById(
-      "btn-imprimir-consulta"
-    );
-
-  if (btn) {
-    btn.style.display =
-      "inline-flex";
+  var btnTodos = document.getElementById("btn-imprimir-consulta-todos");
+  if (btnTodos) {
+    var isConsulta = !!(document.getElementById("consulta-telefones-view") && !document.getElementById("consulta-telefones-view").classList.contains("hidden"));
+    btnTodos.style.display = isConsulta ? "" : "none";
   }
+  var btnStub = document.getElementById("btn-imprimir-consulta");
+  if(btnStub) btnStub.style.display="none";
 }
 
 function mostrarMapaConsulta() {
@@ -848,15 +848,13 @@ function mostrarMapaConsulta() {
 
   detalhes.innerHTML = "";
 
-  const btn =
-    document.getElementById(
-      "btn-imprimir-consulta"
-    );
-
-  if (btn) {
-    btn.style.display =
-      "none";
+  var btnTodosM = document.getElementById("btn-imprimir-consulta-todos");
+  if (btnTodosM) {
+    var isConsultaM = !!(document.getElementById("consulta-telefones-view") && !document.getElementById("consulta-telefones-view").classList.contains("hidden"));
+    btnTodosM.style.display = isConsultaM ? "" : "none";
   }
+  var btnStubM = document.getElementById("btn-imprimir-consulta");
+  if(btnStubM) btnStubM.style.display="none";
 }
 
 /* ==========================================================
@@ -949,16 +947,19 @@ function filtrarSetoresConsulta() {
           return;
         }
 
-        // Mantém apenas setores que contêm o termo — não reexibe todos quando a comarca casa.
-        // Ordem da planilha já é a ordem do DOM, preservada pelo forEach sequencial.
-        setoresList.classList.toggle(
-          "hidden",
-          !mostrar
-        );
-        // Quando a comarca for exibida por nome, mantém o filtro de setores (só os que casam).
-        // Se nenhum setor casar mas a comarca casou, expande a lista mas vazia — a comarca ficará visível com lista expandida vazia; isso indica "comarca encontrada sem setor filtrado".
-        if (mostrar && !setoresList.classList.contains("hidden")) {
-          // garante que setoresList fique visível quando houver match, mas mantém filtro por setor
+        if (!mostrar) {
+          setoresList.classList.add("hidden");
+          setoresList.style.display = "none";
+          setores.forEach(function(s){ s.style.display = "none"; });
+        } else if (comarcaEncontrada) {
+          // Pesquisa casou no nome da comarca → mostra TODOS os setores dela (ordem da planilha)
+          setores.forEach(function(s){ s.style.display = ""; });
+          setoresList.classList.remove("hidden");
+          setoresList.style.display = "";
+        } else {
+          // Pesquisa casou só em setor → mostra apenas setores filtrados
+          // (já filtrados acima via setorEncontrado)
+          setoresList.classList.remove("hidden");
           setoresList.style.display = "";
         }
       }
@@ -968,7 +969,14 @@ function filtrarSetoresConsulta() {
 }
 
 /* ==========================================================
- * IMPRESSÃO / PDF
+ * IMPRESSÃO / PDF — Consulta (detalhe do setor)
+ * ========================================================== */
+function imprimirDetalheSetor(){
+  return imprimirConsultaPDF();
+}
+
+/* ==========================================================
+ * IMPRESSÃO / PDF (detalhe)
  * ========================================================== */
 
 function imprimirConsultaPDF() {

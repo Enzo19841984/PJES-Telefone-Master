@@ -494,11 +494,8 @@ function atualizarInterfaceUsuario() {
     );
 
   if (menuAlteracoes) {
-    // Registro de Alterações: somente para admins (Gestor Sistema / Conteúdo)
-    menuAlteracoes.classList.toggle(
-      "hidden",
-      ehVisitante
-    );
+    // Registro de Alterações: visível para todos (inclui Usuário de Consulta)
+    menuAlteracoes.classList.remove("hidden");
   }
 
   const menuUsuarios =
@@ -563,28 +560,36 @@ function atualizarInterfaceUsuario() {
     }
   } catch (e) {}
 
-  // Botões de impressão — Telefones (admin)
+  // --- Botões de impressão por perfil e view ---
   try {
-    var btnTodos = document.getElementById("btn-imprimir-todos-numeros");
-    var btnPagina = document.getElementById("btn-imprimir-esta-pagina");
-    if (btnTodos) {
-      // Imprimir todos: Gestor Sistema + Gestor Conteúdo (admin), Visitante não vê (usa consulta)
-      btnTodos.style.display = (logado && perfil !== "USUARIO_CONSULTA") ? "" : "none";
-    }
-    if (btnPagina) {
-      // Imprimir esta página: só Gestor de Conteúdo (filtro local)
-      btnPagina.style.display = (logado && perfil === "GESTOR_CONTEUDO") ? "" : "none";
-    }
-  } catch(ePrintAdmin){}
+    var isDashboard = (function(){ var el=document.getElementById("dashboard-view"); return !!(el && !el.classList.contains("hidden")); })();
+    var isTelefones = (function(){ var el=document.getElementById("telefones-view"); return !!(el && !el.classList.contains("hidden")); })();
+    var isConsulta = (function(){ var el=document.getElementById("consulta-telefones-view"); return !!(el && !el.classList.contains("hidden")); })();
+    var isUsuarios = (function(){ var el=document.getElementById("usuarios-view"); return !!(el && !el.classList.contains("hidden")); })();
+    var ehGestor = logado && (perfil === "GESTOR_SISTEMA" || perfil === "GESTOR_CONTEUDO");
 
-  // Botão topo Visitante — Imprimir todas as comarcas
-  try {
-    var btnComarcas = document.getElementById("btn-imprimir-todas-comarcas");
-    if (btnComarcas) {
-      // só Visitante (USUARIO_CONSULTA / não logado) — topo geral
-      btnComarcas.style.display = ehVisitante ? "" : "none";
+    var btnDashboard = document.getElementById("btn-imprimir-dashboard");
+    if (btnDashboard) {
+      btnDashboard.style.display = isDashboard ? "" : "none";
     }
-  } catch(ePrintVisit){}
+    var btnTelefones = document.getElementById("btn-imprimir-telefones");
+    if (btnTelefones) {
+      btnTelefones.style.display = (ehGestor && isTelefones) ? "" : "none";
+    }
+    var btnConsultaTodos = document.getElementById("btn-imprimir-consulta-todos");
+    if (btnConsultaTodos) {
+      btnConsultaTodos.style.display = (ehVisitante && isConsulta) ? "" : "none";
+    }
+    var btnUsuarios = document.getElementById("btn-imprimir-usuarios");
+    if (btnUsuarios) {
+      btnUsuarios.style.display = (ehGestorSistema && isUsuarios) ? "" : "none";
+    }
+    // Compatibilidade: esconde stubs legados permanentemente
+    ["btn-imprimir-todas-comarcas","btn-imprimir-todos-numeros","btn-imprimir-esta-pagina","btn-imprimir-consulta"].forEach(function(id){
+      var el=document.getElementById(id);
+      if(el){ el.style.display="none"; el.classList.add("hidden"); el.setAttribute("aria-hidden","true"); }
+    });
+  } catch(ePrint){}
 
   if (
     typeof listaTelefones !==
@@ -785,10 +790,7 @@ function mostrarView(viewId) {
       viewId = "dashboard-view";
     }
 
-    if (viewId === "registro-alteracoes-view" && ehVisitante) {
-      mostrarToast("Registro de Alterações disponível apenas para Gestores.", "warning");
-      viewId = "consulta-telefones-view";
-    }
+    // Registro de Alterações: liberado para todos (inclui Usuário de Consulta) — sem bloqueio
 
     // login/senha-gerada são públicas — quando já logado, redireciona ao dashboard
     if ((viewId === "login-view" || viewId === "senha-gerada-view") && logado) {
@@ -848,6 +850,8 @@ function mostrarView(viewId) {
         );
       }
     });
+
+  try{ if(typeof atualizarInterfaceUsuario==="function") atualizarInterfaceUsuario(); }catch(eUpd){}
 
   if (
     viewId ===

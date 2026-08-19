@@ -2484,18 +2484,41 @@ function solicitarPermissaoComarca(comarca, authDados) {
   try {
     let usuario = null;
     let viaSenha = false;
-    try {
-      const authTmp = new AuthService();
-      authTmp.exigirPermissao(CONFIG.PERMISSOES.EDITAR);
-      const uTmp = authTmp.usuarioAtual();
-      if (uTmp && uTmp.logado) usuario = uTmp;
-    } catch(eGoogle) { usuario = null; }
+    // Prioriza sessão por senha (Login) quando authDados vier do frontend
+    var dadosAuthPre = (authDados && typeof authDados === "object") ? authDados : {};
+    var emailAuthPre = normalizarEmail(valorObjeto(dadosAuthPre, "email", "EMAIL") || "");
+    var senhaAuthPre = textoSeguro(valorObjeto(dadosAuthPre, "senha", "SENHA", "password") || "");
+    if (emailAuthPre && senhaAuthPre) {
+      var resAuthPre = autenticarConsulta({email: emailAuthPre, senha: senhaAuthPre});
+      if (resAuthPre && resAuthPre.sucesso === true && resAuthPre.dados) {
+        usuario = {
+          email: resAuthPre.dados.email,
+          nome: resAuthPre.dados.nome,
+          perfil: resAuthPre.dados.perfil,
+          ativo: true,
+          logado: true,
+          comarcas: resAuthPre.dados.comarcas || []
+        };
+        viaSenha = true;
+      } else {
+        var msgAuthPre = (resAuthPre && resAuthPre.erro) ? String(resAuthPre.erro) : "Sessão inválida. Faça login novamente.";
+        throw new Error(msgAuthPre);
+      }
+    }
     if (!usuario || !usuario.logado) {
-      // tenta sessão por senha (Gestor Conteúdo logado via Login)
+      try {
+        const authTmp = new AuthService();
+        authTmp.exigirPermissao(CONFIG.PERMISSOES.EDITAR);
+        const uTmp = authTmp.usuarioAtual();
+        if (uTmp && uTmp.logado) usuario = uTmp;
+      } catch(eGoogle) { if(!usuario) usuario = null; }
+    }
+    if (!usuario || !usuario.logado) {
+      // tenta sessão por senha fallback (se não veio no pre)
       var dadosAuth = (authDados && typeof authDados === "object") ? authDados : {};
       var emailAuth = normalizarEmail(valorObjeto(dadosAuth, "email", "EMAIL") || "");
       var senhaAuth = textoSeguro(valorObjeto(dadosAuth, "senha", "SENHA", "password") || "");
-      if (emailAuth && senhaAuth) {
+      if (emailAuth && senhaAuth && !viaSenha) {
         var resAuth = autenticarConsulta({email: emailAuth, senha: senhaAuth});
         if (resAuth && resAuth.sucesso === true && resAuth.dados) {
           usuario = {
