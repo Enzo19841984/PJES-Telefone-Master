@@ -949,18 +949,18 @@ function filtrarSetoresConsulta() {
           return;
         }
 
-        if (comarcaEncontrada) {
-          setores.forEach(
-            setor => {
-              setor.style.display = "";
-            }
-          );
-        }
-
+        // Mantém apenas setores que contêm o termo — não reexibe todos quando a comarca casa.
+        // Ordem da planilha já é a ordem do DOM, preservada pelo forEach sequencial.
         setoresList.classList.toggle(
           "hidden",
           !mostrar
         );
+        // Quando a comarca for exibida por nome, mantém o filtro de setores (só os que casam).
+        // Se nenhum setor casar mas a comarca casou, expande a lista mas vazia — a comarca ficará visível com lista expandida vazia; isso indica "comarca encontrada sem setor filtrado".
+        if (mostrar && !setoresList.classList.contains("hidden")) {
+          // garante que setoresList fique visível quando houver match, mas mantém filtro por setor
+          setoresList.style.display = "";
+        }
       }
     );
   try{ destacarMapaPorBusca(normalizarTexto(campo?.value||"")); }catch(e){}

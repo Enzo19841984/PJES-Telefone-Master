@@ -90,8 +90,28 @@ const API = {
   },
 
   solicitarPermissaoComarca(comarca, sucesso, erro) {
-    criarRunnerAPI(sucesso, erro)
-      .solicitarPermissaoComarca(comarca);
+    var authDados = null;
+    try{
+      var raw = localStorage.getItem("pjes_consulta_sessao");
+      if(raw){
+        var sess = JSON.parse(raw);
+        if(sess && sess.email && sess.senha){
+          authDados = { email: sess.email, senha: sess.senha };
+        } else if(sess && sess.email){
+          // fallback: tenta pegar senha do campo se visível
+          var elS = document.getElementById("login-senha");
+          var sVal = elS ? String(elS.value||"").trim() : "";
+          if(sVal) authDados = { email: sess.email, senha: sVal };
+        }
+      }
+    }catch(e){}
+    if(authDados && authDados.email && authDados.senha){
+      criarRunnerAPI(sucesso, erro)
+        .solicitarPermissaoComarca(comarca, authDados);
+    } else {
+      criarRunnerAPI(sucesso, erro)
+        .solicitarPermissaoComarca(comarca);
+    }
   },
 
   listarUsuarios(sucesso, erro) {

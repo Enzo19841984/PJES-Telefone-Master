@@ -111,7 +111,7 @@ function fazerLoginConsulta(){
       if(btn){ btn.disabled=false; btn.textContent="Entrar →"; }
       if(resp && resp.sucesso===true && resp.dados){
         try{
-          localStorage.setItem("pjes_consulta_sessao", JSON.stringify({ email: resp.dados.email, nome: resp.dados.nome, perfil: resp.dados.perfil, comarcas: resp.dados.comarcas||[], ts: Date.now() }));
+          localStorage.setItem("pjes_consulta_sessao", JSON.stringify({ email: resp.dados.email, nome: resp.dados.nome, perfil: resp.dados.perfil, comarcas: resp.dados.comarcas||[], senha: senha, ts: Date.now() }));
         }catch(e){}
         usuarioAtual = { nome: resp.dados.nome || email.split("@")[0], email: resp.dados.email, perfil: resp.dados.perfil || "GESTOR_CONTEUDO", logado: true, ativo: true, comarcas: Array.isArray(resp.dados.comarcas)?resp.dados.comarcas:[], viaConsulta:true };
         try{ atualizarInterfaceUsuario(); }catch(e){}

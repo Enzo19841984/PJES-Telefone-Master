@@ -21,7 +21,7 @@ function abrirModalNovoTelefone() {
 
   if (titulo) {
     titulo.textContent =
-      "Adicionar novo telefone";
+      "Adicionar novo contato";
   }
 
   const modal =
@@ -362,6 +362,18 @@ function validarFormularioTelefone(
     );
   }
 
+  if (!dados.tipo) {
+    faltantes.push(
+      "Tipo"
+    );
+  }
+
+  if (!dados.endereco) {
+    faltantes.push(
+      "Endereço"
+    );
+  }
+
   if (!dados.status) {
     faltantes.push(
       "Status"
@@ -379,16 +391,19 @@ function validarFormularioTelefone(
     return false;
   }
 
-  if (
-    !dados.numero &&
-    !dados.ramal &&
-    !dados.whatsapp
-  ) {
+  const contatos = [dados.numero, dados.ramal, dados.whatsapp, dados.email].filter(function(v){ return String(v||"").trim() !== ""; });
+  if (contatos.length === 0) {
     exibirNotificacao(
-      "Preencha ao menos um meio de contato: Telefone, Ramal ou WhatsApp.",
+      "Preencha ao menos um meio de contato: Telefone, Ramal, WhatsApp ou E-mail.",
       "error"
     );
-
+    return false;
+  }
+  if (contatos.length > 1) {
+    exibirNotificacao(
+      "Informe apenas um tipo de contato por vez: Telefone, Ramal, WhatsApp ou E-mail.",
+      "error"
+    );
     return false;
   }
 
@@ -667,7 +682,7 @@ function abrirEditarTelefone(id) {
 
   if (titulo) {
     titulo.textContent =
-      "Editar telefone";
+      "Editar contato";
   }
 
   const modal =
