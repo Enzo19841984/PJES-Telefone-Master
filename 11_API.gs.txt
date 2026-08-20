@@ -2477,11 +2477,23 @@ function listarUsuarios() {
  * Solicita acesso de edição a uma comarca fora do escopo
  * do gestor de conteúdo.
  *
- * O pedido é registrado no LOG e notifica os gestores do
- * sistema ativos por e-mail (fila EMAILS_PENDENTES).
+ * Cria uma solicitação PENDENTE na aba SOLICITACOES_ACESSO
+ * para que o Gestor do Sistema veja em solicitacoes-view
+ * (via listarSolicitacoes) e possa aprovar/rejeitar.
+ * Também notifica os gestores do sistema por e-mail
+ * (fila EMAILS_PENDENTES) e registra no LOG.
+ * Usa LockService para evitar duplicidade.
  */
 function solicitarPermissaoComarca(comarca, authDados) {
+  const lock =
+    LockService.getScriptLock();
+
+  let bloqueado = false;
+
   try {
+    lock.waitLock(30000);
+    bloqueado = true;
+
     let usuario = null;
     let viaSenha = false;
     // Prioriza sessão por senha (Login) quando authDados vier do frontend
@@ -2607,6 +2619,95 @@ function solicitarPermissaoComarca(comarca, authDados) {
     }
 
     /*
+     * Verifica solicitação pendente já existente para este e-mail + comarca.
+     * Evita duplicidade na aba SOLICITACOES_ACESSO.
+     */
+    const sheetSolic =
+      DB.solicitacoesAcesso();
+
+    if (!sheetSolic) {
+      throw new Error(
+        "Aba de solicitações de acesso não encontrada."
+      );
+    }
+
+    const dadosSolic =
+      sheetSolic.getDataRange().getValues();
+
+    const indicesSolic =
+      indicesSolicitacao(dadosSolic[0] || []);
+
+    const emailSolicNorm =
+      normalizarEmail(usuario.email);
+
+    const jaPendenteMesmaComarca =
+      dadosSolic.slice(1).some(row => {
+        const emailLinha =
+          indicesSolic.EMAIL !== undefined
+            ? normalizarEmail(row[indicesSolic.EMAIL])
+            : normalizarEmail(row[1]);
+
+        const statusLinha =
+          indicesSolic.STATUS !== undefined
+            ? String(row[indicesSolic.STATUS] || "").trim().toUpperCase()
+            : String(row[5] || "").trim().toUpperCase();
+
+        const comarcaLinha =
+          indicesSolic.COMARCA !== undefined
+            ? normalizarChave(String(row[indicesSolic.COMARCA] || ""))
+            : "";
+
+        return (
+          emailLinha === emailSolicNorm &&
+          statusLinha === "PENDENTE" &&
+          comarcaLinha === chaveAlvo
+        );
+      });
+
+    if (jaPendenteMesmaComarca) {
+      throw new Error(
+        "Já existe uma solicitação pendente para a comarca \"" +
+        comarcaAlvo +
+        "\". Aguarde a análise do Gestor do Sistema."
+      );
+    }
+
+    /*
+     * Cria solicitação PENDENTE para que o Gestor do Sistema
+     * veja em solicitacoes-view (listarSolicitacoes).
+     */
+    const idSolic =
+      Utilities.getUuid();
+
+    const nomeSolic =
+      textoSeguro(usuario.nome) ||
+      String(usuario.email || "")
+        .split("@")[0];
+
+    const justificativaSolic =
+      "Solicitação de acesso à comarca \"" +
+      comarcaAlvo +
+      "\" via Telefones (Gestor de Conteúdo) \u2014 " +
+      nomeSolic +
+      " (" +
+      emailSolicNorm +
+      ")";
+
+    const linhaSolic =
+      montarLinhaSolicitacao(indicesSolic, {
+        ID: idSolic,
+        EMAIL: emailSolicNorm,
+        NOME: nomeSolic,
+        COMARCA: comarcaAlvo,
+        PERFIL: CONFIG.PERFIS.GESTOR_CONTEUDO,
+        JUSTIFICATIVA: justificativaSolic,
+        STATUS: "PENDENTE",
+        DATA: new Date()
+      });
+
+    sheetSolic.appendRow(linhaSolic);
+
+    /*
      * Destinatários: gestores do sistema ativos;
      * sem nenhum, usa a configuração EMAIL_GESTOR.
      */
@@ -2704,7 +2805,8 @@ function solicitarPermissaoComarca(comarca, authDados) {
 
     return respostaSucesso({
       comarca: comarcaAlvo,
-      notificados: notificados
+      notificados: notificados,
+      id: idSolic
     });
   } catch (erro) {
     registrarErroAPI(
@@ -2713,6 +2815,180 @@ function solicitarPermissaoComarca(comarca, authDados) {
     );
 
     return respostaErro(erro);
+  } finally {
+    if (bloqueado) {
+      lock.releaseLock();
+    }
+  }
+}
+
+/**
+ * Cancela uma solicitação pendente de acesso à comarca.
+ *
+ * O gestor de conteúdo pode desfazer o pedido dentro da janela
+ * de 10 minutos (controle de UI) ou a qualquer momento enquanto
+ * ainda estiver PENDENTE. Remove a linha da aba SOLICITACOES_ACESSO
+ * para que o Gestor do Sistema não veja mais o pedido.
+ */
+function cancelarSolicitacaoComarca(comarca, authDados) {
+  const lock =
+    LockService.getScriptLock();
+
+  let bloqueado = false;
+
+  try {
+    lock.waitLock(30000);
+    bloqueado = true;
+
+    let usuario = null;
+    let viaSenha = false;
+    var dadosAuthPre2 = (authDados && typeof authDados === "object") ? authDados : {};
+    var emailAuthPre2 = normalizarEmail(valorObjeto(dadosAuthPre2, "email", "EMAIL") || "");
+    var senhaAuthPre2 = textoSeguro(valorObjeto(dadosAuthPre2, "senha", "SENHA", "password") || "");
+    if (emailAuthPre2 && senhaAuthPre2) {
+      var resAuthPre2 = autenticarConsulta({email: emailAuthPre2, senha: senhaAuthPre2});
+      if (resAuthPre2 && resAuthPre2.sucesso === true && resAuthPre2.dados) {
+        usuario = {
+          email: resAuthPre2.dados.email,
+          nome: resAuthPre2.dados.nome,
+          perfil: resAuthPre2.dados.perfil,
+          ativo: true,
+          logado: true,
+          comarcas: resAuthPre2.dados.comarcas || []
+        };
+        viaSenha = true;
+      } else {
+        var msgAuthPre2 = (resAuthPre2 && resAuthPre2.erro) ? String(resAuthPre2.erro) : "Sessão inválida. Faça login novamente.";
+        throw new Error(msgAuthPre2);
+      }
+    }
+    if (!usuario || !usuario.logado) {
+      try {
+        const authTmp2 = new AuthService();
+        authTmp2.exigirPermissao(CONFIG.PERMISSOES.EDITAR);
+        const uTmp2 = authTmp2.usuarioAtual();
+        if (uTmp2 && uTmp2.logado) usuario = uTmp2;
+      } catch(eGoogle2) { if(!usuario) usuario = null; }
+    }
+    if (!usuario || !usuario.logado) {
+      var dadosAuth2 = (authDados && typeof authDados === "object") ? authDados : {};
+      var emailAuth2 = normalizarEmail(valorObjeto(dadosAuth2, "email", "EMAIL") || "");
+      var senhaAuth2 = textoSeguro(valorObjeto(dadosAuth2, "senha", "SENHA", "password") || "");
+      if (emailAuth2 && senhaAuth2 && !viaSenha) {
+        var resAuth2 = autenticarConsulta({email: emailAuth2, senha: senhaAuth2});
+        if (resAuth2 && resAuth2.sucesso === true && resAuth2.dados) {
+          usuario = {
+            email: resAuth2.dados.email,
+            nome: resAuth2.dados.nome,
+            perfil: resAuth2.dados.perfil,
+            ativo: true,
+            logado: true,
+            comarcas: resAuth2.dados.comarcas || []
+          };
+          viaSenha = true;
+        } else {
+          var msgAuth2 = (resAuth2 && resAuth2.erro) ? String(resAuth2.erro) : "Sessão inválida. Faça login novamente.";
+          throw new Error(msgAuth2);
+        }
+      }
+    }
+    if (!usuario || !usuario.logado) {
+      throw new Error("É necessário estar autenticado.");
+    }
+    if (usuario.perfil !== CONFIG.PERFIS.GESTOR_CONTEUDO) {
+      throw new Error("Somente gestores de conteúdo podem cancelar solicitações de comarca.");
+    }
+
+    const comarcaAlvo2 =
+      textoSeguro(comarca);
+
+    if (!comarcaAlvo2) {
+      throw new Error("Informe a comarca desejada.");
+    }
+
+    const chaveAlvo2 =
+      normalizarChave(comarcaAlvo2);
+
+    const sheetSolic2 =
+      DB.solicitacoesAcesso();
+
+    if (!sheetSolic2) {
+      throw new Error("Aba de solicitações de acesso não encontrada.");
+    }
+
+    const dadosSolic2 =
+      sheetSolic2.getDataRange().getValues();
+
+    if (dadosSolic2.length <= 1) {
+      throw new Error("Nenhuma solicitação encontrada para cancelar.");
+    }
+
+    const indicesSolic2 =
+      indicesSolicitacao(dadosSolic2[0] || []);
+
+    const emailSolicNorm2 =
+      normalizarEmail(usuario.email);
+
+    let linhaAlvo = -1;
+    let idAlvo = "";
+
+    for (let i = 1; i < dadosSolic2.length; i++) {
+      const emailLinha2 =
+        indicesSolic2.EMAIL !== undefined
+          ? normalizarEmail(dadosSolic2[i][indicesSolic2.EMAIL])
+          : normalizarEmail(dadosSolic2[i][1]);
+
+      const statusLinha2 =
+        indicesSolic2.STATUS !== undefined
+          ? String(dadosSolic2[i][indicesSolic2.STATUS] || "").trim().toUpperCase()
+          : String(dadosSolic2[i][5] || "").trim().toUpperCase();
+
+      const comarcaLinha2 =
+        indicesSolic2.COMARCA !== undefined
+          ? normalizarChave(String(dadosSolic2[i][indicesSolic2.COMARCA] || ""))
+          : "";
+
+      if (
+        emailLinha2 === emailSolicNorm2 &&
+        statusLinha2 === "PENDENTE" &&
+        comarcaLinha2 === chaveAlvo2
+      ) {
+        linhaAlvo = i + 1;
+        idAlvo = indicesSolic2.ID !== undefined ? String(dadosSolic2[i][indicesSolic2.ID] || "") : "";
+        break;
+      }
+    }
+
+    if (linhaAlvo === -1) {
+      throw new Error("Nenhuma solicitação pendente encontrada para a comarca \"" + comarcaAlvo2 + "\".");
+    }
+
+    // Remove a linha pendente (Gestor do Sistema não verá mais)
+    sheetSolic2.deleteRow(linhaAlvo);
+
+    registrarLog(
+      "CANCELAR_SOLICITACAO_COMARCA " +
+      textoSeguro(usuario.email) +
+      " -> " +
+      comarcaAlvo2 +
+      (idAlvo ? " (" + idAlvo + ")" : "")
+    );
+
+    return respostaSucesso({
+      comarca: comarcaAlvo2,
+      id: idAlvo
+    });
+  } catch (erro) {
+    registrarErroAPI(
+      "CANCELAR_SOLICITACAO_COMARCA",
+      erro
+    );
+
+    return respostaErro(erro);
+  } finally {
+    if (bloqueado) {
+      lock.releaseLock();
+    }
   }
 }
 
@@ -2794,15 +3070,25 @@ function atualizarUsuario(email, dados) {
         ? valorObjeto(entrada, "comarcas", "COMARCAS")
         : null;
 
-    const sheet = DB.usuarios();
-    const mapa = DB.map(sheet);
-    const dadosSheet = sheet.getDataRange().getValues();
+    let sheet = DB.usuarios();
+    let mapa = DB.map(sheet);
+    let dadosSheet = sheet.getDataRange().getValues();
 
-    const idxEmail = mapa.EMAIL;
-    const idxNome = mapa.NOME;
-    const idxPerfil = mapa.PERFIL;
-    const idxAtivo = mapa.ATIVO;
-    const idxComarcas = mapa.COMARCAS;
+    let idxEmail = mapa.EMAIL;
+    let idxNome = mapa.NOME;
+    let idxPerfil = mapa.PERFIL;
+    let idxAtivo = mapa.ATIVO;
+    let idxComarcas = mapa.COMARCAS;
+    let idxSenha = mapa.SENHA;
+
+    if (idxSenha === undefined) {
+      try {
+        const ssTmpSenha = DB.getSpreadsheet();
+        garantirColunaSenhaUsuarios(ssTmpSenha, sheet);
+        mapa = DB.map(sheet);
+        idxSenha = mapa.SENHA;
+      } catch (eSenhaU) {}
+    }
 
     let linhaEncontrada = -1;
 
@@ -2848,10 +3134,14 @@ function atualizarUsuario(email, dados) {
     const ativoNovo =
       possuiAtivo ? paraBoolean(ativoBruto) : ativoAtual;
 
-    const comarcasNovo =
+    let comarcasNovo =
       possuiComarcas
         ? parseComarcas(comarcasBruto)
         : comarcasAtual;
+
+    if (perfilNovo === CONFIG.PERFIS.GESTOR_SISTEMA) {
+      comarcasNovo = [];
+    }
 
     if (
       perfilNovo === CONFIG.PERFIS.GESTOR_CONTEUDO &&
@@ -2912,10 +3202,22 @@ function atualizarUsuario(email, dados) {
       sheet.getRange(linhaEncontrada, idxAtivo).setValue(ativoNovo ? "SIM" : "NÃO");
     }
 
-    if (idxComarcas !== undefined && possuiComarcas) {
+    const deveLimparComarcasSistema = perfilNovo === CONFIG.PERFIS.GESTOR_SISTEMA;
+
+    if (idxComarcas !== undefined && (possuiComarcas || deveLimparComarcasSistema)) {
       sheet.getRange(linhaEncontrada, idxComarcas).setValue(
         serializarComarcas(comarcasNovo)
       );
+    }
+
+    if (idxSenha !== undefined) {
+      const senhaAtual = textoSeguro(dadosSheet[linhaEncontrada - 1][idxSenha - 1]);
+      if (!senhaAtual && ativoNovo) {
+        try {
+          const novaSenha = gerarSenha20();
+          sheet.getRange(linhaEncontrada, idxSenha).setValue(novaSenha);
+        } catch (eNovaSenha) {}
+      }
     }
 
     SpreadsheetApp.flush();
@@ -2981,7 +3283,15 @@ function criarUsuario(dados) {
 
     const nome = textoSeguro(valorObjeto(entrada, "nome", "NOME"));
 
-    if (nome && nome.length > CONFIG.LIMITES.TAMANHO_MAXIMO_NOME) {
+    if (!nome) {
+      throw new Error("Nome é obrigatório.");
+    }
+
+    if (nome.length < 3) {
+      throw new Error("Informe um nome válido (mínimo de 3 caracteres).");
+    }
+
+    if (nome.length > CONFIG.LIMITES.TAMANHO_MAXIMO_NOME) {
       throw new Error("Nome muito longo.");
     }
 
@@ -3007,13 +3317,25 @@ function criarUsuario(dados) {
 
     const comarcasSerial = perfil === CONFIG.PERFIS.GESTOR_SISTEMA ? "" : serializarComarcas(comarcasLista);
 
-    const sheet = DB.usuarios();
-    const mapa = DB.map(sheet);
-    const idxEmail = mapa.EMAIL;
-    const idxNome = mapa.NOME;
-    const idxPerfil = mapa.PERFIL;
-    const idxAtivo = mapa.ATIVO;
-    const idxComarcas = mapa.COMARCAS;
+    const senhaGerada = gerarSenha20();
+
+    let sheet = DB.usuarios();
+    let mapa = DB.map(sheet);
+    let idxEmail = mapa.EMAIL;
+    let idxNome = mapa.NOME;
+    let idxPerfil = mapa.PERFIL;
+    let idxAtivo = mapa.ATIVO;
+    let idxComarcas = mapa.COMARCAS;
+    let idxSenha = mapa.SENHA;
+
+    if (idxSenha === undefined) {
+      try {
+        const ssTmp = DB.getSpreadsheet();
+        garantirColunaSenhaUsuarios(ssTmp, sheet);
+        mapa = DB.map(sheet);
+        idxSenha = mapa.SENHA;
+      } catch (eSenha) {}
+    }
 
     if (!idxEmail || !idxPerfil || !idxAtivo) {
       throw new Error("Aba USUARIOS sem cabeçalhos esperados. Execute instalarSistema().");
@@ -3027,7 +3349,18 @@ function criarUsuario(dados) {
       }
     }
 
-    const headers = DB.headers(sheet);
+    let headers = DB.headers(sheet);
+
+    if (idxSenha === undefined) {
+      try {
+        const ssTmp2 = DB.getSpreadsheet();
+        garantirColunaSenhaUsuarios(ssTmp2, sheet);
+        mapa = DB.map(sheet);
+        headers = DB.headers(sheet);
+        idxSenha = mapa.SENHA;
+      } catch (eSenha2) {}
+    }
+
     const novaLinha = new Array(headers.length).fill("");
 
     if (idxEmail) novaLinha[idxEmail - 1] = email;
@@ -3035,6 +3368,7 @@ function criarUsuario(dados) {
     if (idxPerfil) novaLinha[idxPerfil - 1] = perfil;
     if (idxAtivo) novaLinha[idxAtivo - 1] = ativo ? "SIM" : "NÃO";
     if (idxComarcas !== undefined) novaLinha[idxComarcas - 1] = comarcasSerial;
+    if (idxSenha !== undefined) novaLinha[idxSenha - 1] = senhaGerada;
 
     sheet.appendRow(novaLinha);
     SpreadsheetApp.flush();
@@ -3046,7 +3380,8 @@ function criarUsuario(dados) {
       nome: nome,
       perfil: perfil,
       ativo: ativo,
-      comarcas: comarcasSerial
+      comarcas: comarcasSerial,
+      senha: senhaGerada
     });
   } catch (erro) {
     registrarErroAPI("CRIAR_USUARIO", erro);

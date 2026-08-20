@@ -40,7 +40,10 @@ Arquivo: Login.html — Login do Usuário de Consulta (e-mail + senha 20)
     <div class="lg-body">
       <div class="lg-field">
         <label for="login-email">📧 E-mail institucional</label>
-        <input id="login-email" type="email" maxlength="150" autocomplete="email" placeholder="nome@tjes.jus.br">
+        <div style="display:flex;align-items:stretch;">
+          <input id="login-email" type="text" maxlength="80" autocomplete="off" placeholder="nome" style="flex:1;border-radius:10px 0 0 10px;">
+          <span style="display:flex;align-items:center;padding:0 12px;background:#f1f5f9;border:1.5px solid #cbd5e1;border-left:0;border-radius:0 10px 10px 0;font-size:13px;color:#475569;font-weight:600;white-space:nowrap;">@tjes.jus.br</span>
+        </div>
       </div>
       <div class="lg-field">
         <label for="login-senha">🔑 Senha de acesso (20 caracteres)</label>
@@ -90,7 +93,8 @@ function limparMensagemLogin(){
 
 function fazerLoginConsulta(){
   limparMensagemLogin();
-  var email = String(document.getElementById("login-email")?.value || "").trim().toLowerCase();
+  var emailRaw = String(document.getElementById("login-email")?.value || "").trim().toLowerCase();
+  var email = emailRaw.includes("@") ? emailRaw : (emailRaw ? emailRaw + "@tjes.jus.br" : "");
   var senha = String(document.getElementById("login-senha")?.value || "").trim();
   if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)){
     exibirMensagemLogin("Informe um e-mail válido.", "error"); return;

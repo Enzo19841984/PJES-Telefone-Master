@@ -343,6 +343,26 @@ function criarSeletorComarcas(valorInicial) {
 
   atualizarBotao();
 
+  function limparSelecao() {
+    selecionadas = {};
+    renderizarLista();
+    atualizarBotao();
+  }
+
+  function definirValor(valor) {
+    selecionadas = {};
+    String(valor || "")
+      .split(/[,;\n|]+/)
+      .forEach(function(nome) {
+        nome = String(nome || "").trim();
+        if (nome) {
+          selecionadas[normalizarComarcaKey(nome)] = nome;
+        }
+      });
+    renderizarLista();
+    atualizarBotao();
+  }
+
   return {
     elemento: wrapper,
     obterValor: function() {
@@ -351,7 +371,9 @@ function criarSeletorComarcas(valorInicial) {
           return selecionadas[key];
         })
         .join(", ");
-    }
+    },
+    limpar: limparSelecao,
+    definirValor: definirValor
   };
 }
 
@@ -438,6 +460,14 @@ function renderizarUsuarios(lista) {
 
     tdComarcas.appendChild(seletorComarcas.elemento);
     tr.appendChild(tdComarcas);
+
+    selectPerfil.addEventListener("change", function() {
+      if (selectPerfil.value === "GESTOR_SISTEMA") {
+        if (seletorComarcas && typeof seletorComarcas.limpar === "function") {
+          seletorComarcas.limpar();
+        }
+      }
+    });
 
     var tdAtivo = criarCelulaUsuario("");
     tdAtivo.style.textAlign = "center";
@@ -642,6 +672,9 @@ function alternarComarcasNovoUsuario() {
   var grupo = document.getElementById("grupo-novo-usuario-comarcas");
   if (!perfil || !grupo) return;
   if (perfil.value === "GESTOR_SISTEMA") {
+    if (novoUsuarioSeletorComarcas && typeof novoUsuarioSeletorComarcas.limpar === "function") {
+      novoUsuarioSeletorComarcas.limpar();
+    }
     grupo.style.display = "none";
     grupo.title = "Gestor do Sistema tem acesso a todas as comarcas";
   } else {
@@ -664,7 +697,8 @@ function salvarNovoUsuario() {
   var ativoCheck = document.getElementById("novo-usuario-ativo");
   var btn = document.getElementById("btn-salvar-novo-usuario");
 
-  var email = emailInput ? String(emailInput.value || "").trim() : "";
+  var emailRaw = emailInput ? String(emailInput.value || "").trim() : "";
+  var email = emailRaw.toLowerCase().includes("@") ? emailRaw : (emailRaw ? emailRaw + "@tjes.jus.br" : "");
   var nome = nomeInput ? String(nomeInput.value || "").trim() : "";
   var perfil = perfilSelect ? String(perfilSelect.value || "").trim().toUpperCase() : "";
   var ativo = ativoCheck ? !!ativoCheck.checked : true;
@@ -674,6 +708,20 @@ function salvarNovoUsuario() {
   if (!email) {
     mostrarErroNovoUsuario("Informe o e-mail do usuário.");
     if (emailInput) emailInput.focus();
+    return;
+  }
+  if (!nome) {
+    mostrarErroNovoUsuario("Informe o nome do usuário.");
+    if (nomeInput) nomeInput.focus();
+    return;
+  }
+  if (nome.length < 3) {
+    mostrarErroNovoUsuario("Informe um nome válido (mínimo de 3 caracteres).");
+    if (nomeInput) nomeInput.focus();
+    return;
+  }
+  if (nome.length > 150) {
+    mostrarErroNovoUsuario("O nome informado é muito grande.");
     return;
   }
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {

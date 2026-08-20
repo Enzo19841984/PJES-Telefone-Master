@@ -512,8 +512,8 @@ function atualizarInterfaceUsuario() {
 
   const menuLogin = document.getElementById("menu-login");
   if (menuLogin) {
-    // Login só para visitante (quem ainda não logou como consulta)
-    menuLogin.classList.toggle("hidden", logado);
+    // Removido da sidebar para Usuário de Consulta (duplicado com botão azul inferior) — sempre oculto para visitante
+    menuLogin.classList.add("hidden");
   }
 
   const menuFormularioLogin = document.getElementById("menu-formulario");
@@ -574,11 +574,25 @@ function atualizarInterfaceUsuario() {
     }
     var btnTelefones = document.getElementById("btn-imprimir-telefones");
     if (btnTelefones) {
-      btnTelefones.style.display = (ehGestor && isTelefones) ? "" : "none";
+      // Apenas Gestor do Sistema vê o Imprimir da tabela; Gestor Conteúdo usa o botão da consulta
+      btnTelefones.style.display = (ehGestorSistema && isTelefones) ? "" : "none";
+    }
+    var btnNovoTelefone = document.getElementById("btn-novo-telefone");
+    if (btnNovoTelefone) {
+      // Gestor Sistema sempre; Gestor Conteúdo agora usa o botão da consulta (mapa)
+      btnNovoTelefone.style.display = (ehGestorSistema && isTelefones) ? "" : "none";
+      btnNovoTelefone.disabled = !ehGestorSistema;
     }
     var btnConsultaTodos = document.getElementById("btn-imprimir-consulta-todos");
     if (btnConsultaTodos) {
-      btnConsultaTodos.style.display = (ehVisitante && isConsulta) ? "" : "none";
+      // Visitante e Gestor de Conteúdo (mapa) podem imprimir todos os contatos; Gestor Sistema usa Imprimir/PDF da tabela
+      var podeImprimirConsulta = isConsulta && (ehVisitante || ehGestorConteudo);
+      btnConsultaTodos.style.display = podeImprimirConsulta ? "" : "none";
+    }
+    // Novo Contato no mapa para Gestor de Conteúdo
+    var btnNovoNoConsulta = document.getElementById("btn-novo-telefone-consulta");
+    if (btnNovoNoConsulta) {
+      btnNovoNoConsulta.style.display = (ehGestorConteudo && isConsulta) ? "" : "none";
     }
     var btnUsuarios = document.getElementById("btn-imprimir-usuarios");
     if (btnUsuarios) {
@@ -701,11 +715,16 @@ function fazerLogin() {
  * - Visitante -> aba de Consulta (mapa + lista somente leitura)
  */
 function navegarParaTelefones() {
+  if (typeof usuarioAtual !== "undefined" && usuarioAtual && usuarioAtual.logado === true && usuarioAtual.perfil === "GESTOR_CONTEUDO") {
+    // Gestor de Conteúdo usa o mesmo layout de Consulta (mapa + busca) mas com ações administrativas
+    mostrarView("consulta-telefones-view");
+    return;
+  }
   var ehGestor =
     typeof usuarioAtual !== "undefined" &&
     usuarioAtual &&
     usuarioAtual.logado === true &&
-    (usuarioAtual.perfil === "GESTOR_SISTEMA" || usuarioAtual.perfil === "GESTOR_CONTEUDO");
+    usuarioAtual.perfil === "GESTOR_SISTEMA";
 
   mostrarView(ehGestor ? "telefones-view" : "consulta-telefones-view");
 }
