@@ -698,7 +698,7 @@ function salvarNovoUsuario() {
   var btn = document.getElementById("btn-salvar-novo-usuario");
 
   var emailRaw = emailInput ? String(emailInput.value || "").trim() : "";
-  var email = emailRaw.toLowerCase().includes("@") ? emailRaw : (emailRaw ? emailRaw + "@tjes.jus.br" : "");
+  var email = emailRaw.toLowerCase().includes("@") ? emailRaw : (emailRaw ? emailRaw + "@" + ((typeof window.DOMINIO_INSTITUCIONAL!=="undefined"&&window.DOMINIO_INSTITUCIONAL)||"tjes.jus.br") : "");
   var nome = nomeInput ? String(nomeInput.value || "").trim() : "";
   var perfil = perfilSelect ? String(perfilSelect.value || "").trim().toUpperCase() : "";
   var ativo = ativoCheck ? !!ativoCheck.checked : true;
@@ -728,8 +728,9 @@ function salvarNovoUsuario() {
     mostrarErroNovoUsuario("Informe um e-mail válido.");
     return;
   }
-  if (!email.toLowerCase().endsWith("@tjes.jus.br")) {
-    mostrarErroNovoUsuario("Somente e-mails @tjes.jus.br são permitidos.");
+  var _domUJS=((typeof window.DOMINIO_INSTITUCIONAL!=="undefined"&&window.DOMINIO_INSTITUCIONAL)||"tjes.jus.br");
+  if (!email.toLowerCase().endsWith("@" + _domUJS.toLowerCase())) {
+    mostrarErroNovoUsuario("Somente e-mails @" + _domUJS + " são permitidos.");
     return;
   }
   if (perfil !== "GESTOR_SISTEMA" && perfil !== "GESTOR_CONTEUDO") {

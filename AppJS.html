@@ -22,9 +22,9 @@ function restaurarSessaoConsulta(){
     if(!raw) return false;
     var sess = JSON.parse(raw);
     if(!sess || !sess.email || !sess.perfil) return false;
-    // expira em 30 dias
+    // expira em 2h (mitiga exposicao de senha em localStorage; veja Login.html)
     var ts = Number(sess.ts||0);
-    if(ts && (Date.now() - ts) > 30*24*60*60*1000){ localStorage.removeItem("pjes_consulta_sessao"); return false; }
+    if(ts && (Date.now() - ts) > 2*60*60*1000){ localStorage.removeItem("pjes_consulta_sessao"); return false; }
     // se já logado via Google gestor, não sobrescreve
     if(usuarioAtual && usuarioAtual.logado && (usuarioAtual.perfil==="GESTOR_SISTEMA"||usuarioAtual.perfil==="GESTOR_CONTEUDO")) return true;
     usuarioAtual = { nome: sess.nome||sess.email.split("@")[0], email: sess.email, perfil: sess.perfil || "USUARIO_CONSULTA", logado: true, ativo: true, comarcas: Array.isArray(sess.comarcas)?sess.comarcas:[], viaConsulta: true };
@@ -603,6 +603,8 @@ function atualizarInterfaceUsuario() {
       var el=document.getElementById(id);
       if(el){ el.style.display="none"; el.classList.add("hidden"); el.setAttribute("aria-hidden","true"); }
     });
+    // M6/L4: Setor filter visibility — only Gestor Sistema in Telefones view
+    var gSetor=document.getElementById("grupo-filtro-setor"); if(gSetor) gSetor.style.display = (ehGestorSistema && isTelefones) ? "" : "none";
   } catch(ePrint){}
 
   if (

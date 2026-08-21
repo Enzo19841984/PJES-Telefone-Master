@@ -16,6 +16,7 @@ let filtroAtual = {
 
 let pesquisaTimer = null;
 
+// shared with DashboardJS/ConsultarJS — frontend norm variant; GS canonical normalizarChave in 02_Utils.gs.txt
 function normalizarTextoFront(valor) {
   return String(
     valor === null ||
@@ -383,6 +384,9 @@ function atualizarTabelaComFiltros() {
   );
 }
 
+// L5 perf: carregarFiltros is O(n^2) via some() loops; TODO cache mapaSetorPorComarca grouped by comarca||setor and invalidate on listaTelefones change
+var cacheSetoresPorFiltro = null; // invalidated when listaTelefones changes (future: build Map once)
+
 function carregarFiltros() {
   if (
     typeof listaTelefones ===
@@ -394,6 +398,7 @@ function carregarFiltros() {
     return;
   }
 
+  // perf: setoresFiltro/comarcas built via Set; comarcasPorMicro/setorFiltrados use listaTelefones.some() O(n^2) — acceptable for <5k rows; cacheSetoresPorFiltro reserved for future optimization
   const regioes =
     new Set();
 

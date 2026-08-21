@@ -14,6 +14,7 @@ let comarcasPorMicrorregiao = {};
 let ordemComarcas = [];
 let microrregiaoSelecionada = "";
 
+// shared with ConsultarJS/SearchJS — frontend duplicate intentional; GS canonical in 02_Utils.gs.txt
 function normalizarChave(valor) {
   return String(valor ?? "")
     .normalize("NFD")
@@ -98,6 +99,7 @@ function iniciarConsultaTelefones() {
       processarDados();
       preencherFiltroMicrorregiao();
       renderizarComarcas();
+      try{ sincronizarSolicitacoesPendentesDashboard(); }catch(e){}
       atualizarDashboardPublico(todosTelefones);
 
       if (typeof carregarFiltros === "function") {
@@ -406,6 +408,7 @@ function renderizarComarcas() {
     filtrarSetoresConsulta();
   }
   try{ destacarMapaPorBusca(normalizarTexto(termo)); }catch(e){}
+  try{ if(!termo && !microrregiaoSelecionada) sincronizarSolicitacoesPendentesDashboard(); }catch(e){}
 }
 
 function toggleComarca(id) {
@@ -618,6 +621,40 @@ function renderizarResumoDashboard(
 
 
 function chaveSolicitacaoComarcaGC(c){ return "solicitacao_comarca_"+String(c||"").normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/[^a-zA-Z0-9]/g,"").toUpperCase(); }
+function sincronizarSolicitacoesPendentesDashboard(){
+  try{
+    if(typeof API==="undefined"||typeof API.listarSolicitacoes!=="function") return;
+    if(typeof usuarioAtual==="undefined"||!usuarioAtual||!usuarioAtual.email) return;
+    if(String(usuarioAtual.perfil||"").toUpperCase()!=="GESTOR_CONTEUDO") return;
+    var emailAtual = String(usuarioAtual.email||"").trim().toLowerCase();
+    if(!emailAtual) return;
+    API.listarSolicitacoes(function(res){
+      try{
+        if(!res||res.sucesso!==true||!Array.isArray(res.dados)) return;
+        var chavesAfetadas=false;
+        res.dados.forEach(function(s){
+          try{
+            var em=String(s.email||s.EMAIL||"").trim().toLowerCase();
+            var st=String(s.status||s.STATUS||"").trim().toUpperCase();
+            var com=String(s.comarca||s.COMARCA||"").trim();
+            if(em===emailAtual && st==="PENDENTE" && com){
+              com.split(/[,;]+/).forEach(function(c){
+                var cc=String(c||"").trim(); if(!cc) return;
+                try{ window.sessionStorage.setItem(chaveSolicitacaoComarcaGC(cc), String(Date.now()));
+                     // tambem marca chave da TableJS (com email) para consistencia
+                     try{ if(typeof chaveSolicitacaoComarca==="function") window.sessionStorage.setItem(chaveSolicitacaoComarca(cc), String(Date.now())); }catch(e){}
+                     chavesAfetadas=true; }catch(e){}
+              });
+            }
+          }catch(e){}
+        });
+        if(chavesAfetadas){
+          try{ if(typeof renderizarComarcas==="function") renderizarComarcas(); }catch(e){}
+        }
+      }catch(e){}
+    }, function(){ /* sem permissao: silencioso */ });
+  }catch(e){}
+}
 function handleSolicitarComarcaClick(comarca, botao){
   try{
     var k=chaveSolicitacaoComarcaGC(comarca);
@@ -632,7 +669,7 @@ function handleSolicitarComarcaClick(comarca, botao){
           if(res && res.sucesso===true){
             try{ sessionStorage.removeItem(k);}catch(e){}
             if(botao){ botao.textContent="🔓 Solicitar acesso"; botao.style.background=""; botao.style.borderColor=""; botao.style.color=""; botao.disabled=false; }
-            if(typeof mostrarToast==="function") mostrarToast("Solicitação cancelada.", "success"); else alert("Solicitação cancelada.");
+            if(typeof mostrarToast==="function") mostrarToast("Solicitação cancelada.","warning"); else try{ alert("Solicitação cancelada."); }catch(e){}
           } else {
             if(botao){ botao.disabled=false; botao.textContent="✓ Solicitado"; }
             if(typeof mostrarToast==="function") mostrarToast((res&&res.erro)||"Falha ao cancelar.", "error");
@@ -735,7 +772,7 @@ function imprimirMultiplasComarcas(listaComarcas){
     w.document.open(); w.document.write(html); w.document.close();
   }catch(e){ console.error(e); if(typeof mostrarToast==="function") mostrarToast("N\u00e3o foi poss\u00edvel imprimir.","error"); }
 }
-function imprimirConteudoPermitido(){
+function imprimirConteudoPermitidoDashboard(){
   try{
     var perm = null;
     try{ if(typeof comarcasPermitidasDoUsuario==="function") perm = comarcasPermitidasDoUsuario(); }catch(e){ perm=null; }
@@ -755,6 +792,8 @@ function imprimirConteudoPermitido(){
     return imprimirMultiplasComarcas(lista);
   }catch(e){ console.error(e); if(typeof mostrarToast==="function") mostrarToast("N\u00e3o foi poss\u00edvel imprimir.","error"); }
 }
+if(typeof window!=="undefined"){ window.imprimirConteudoPermitidoDashboard = imprimirConteudoPermitidoDashboard; window.imprimirConteudoPermitido = imprimirConteudoPermitidoDashboard; }
+function imprimirConteudoPermitido(){ return imprimirConteudoPermitidoDashboard(); }
 function imprimirTodasComarcas(){ return imprimirDashboardView(); }
 function imprimirDashboard(){ return imprimirDashboardView(); }
 function imprimirDashboardView(){

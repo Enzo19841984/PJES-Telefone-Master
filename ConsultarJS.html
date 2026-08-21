@@ -1219,6 +1219,8 @@ function mostrarMapaConsulta() {
  * FILTRO
  * ========================================================== */
 
+var filtroConsultaTimer=null; function filtrarSetoresConsultaDebounced(){ clearTimeout(filtroConsultaTimer); filtroConsultaTimer=setTimeout(filtrarSetoresConsulta,120); }
+
 function filtrarSetoresConsulta() {
   const campo =
     document.getElementById(
@@ -1345,34 +1347,47 @@ function filtrarSetoresConsulta() {
 
 function imprimirConteudoPermitido(){
   try{
-    if(typeof window.imprimirMultiplasComarcas==="function" || typeof imprimirMultiplasComarcas==="function"){
-      // Delegate to Dashboard's implementation if available
-      if(typeof window.imprimirMultiplasComarcas==="function"){} // no-op, Dashboard defines globally
+    if(typeof window.imprimirConteudoPermitidoDashboard==="function") return window.imprimirConteudoPermitidoDashboard();
+    if(typeof imprimirConteudoPermitidoDashboard==="function") return imprimirConteudoPermitidoDashboard();
+    if(typeof window.imprimirMultiplasComarcas==="function"){
+      var perm=null;
+      try{ if(typeof comarcasPermitidasDoUsuario==="function") perm=comarcasPermitidasDoUsuario(); }catch(e){}
+      var lista=[];
+      if(typeof ordemComarcas!=="undefined"&&ordemComarcas){
+        if(perm===null) lista=ordemComarcas.slice();
+        else if(Array.isArray(perm)&&perm.length){
+          for(var i=0;i<ordemComarcas.length;i++){
+            var c=ordemComarcas[i];
+            var ck=typeof normalizarChaveTabela==="function"?normalizarChaveTabela(c):String(c).normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/[^a-zA-Z0-9]/g,"").toUpperCase();
+            if(perm.indexOf(ck)!==-1) lista.push(c);
+          }
+          if(!lista.length) lista=ordemComarcas.slice();
+        } else lista=ordemComarcas.slice();
+        if(typeof imprimirMultiplasComarcas==="function") return imprimirMultiplasComarcas(lista);
+      }
+      if(typeof mostrarToast==="function") mostrarToast("Impress\u00e3o em preparo","info");
+    } else if(typeof imprimirMultiplasComarcas==="function"){
+      var perm=null;
+      try{ if(typeof comarcasPermitidasDoUsuario==="function") perm=comarcasPermitidasDoUsuario(); }catch(e){}
+      var lista=[];
+      if(typeof ordemComarcas!=="undefined"&&ordemComarcas){
+        if(perm===null) lista=ordemComarcas.slice();
+        else if(Array.isArray(perm)&&perm.length){
+          for(var i=0;i<ordemComarcas.length;i++){
+            var c=ordemComarcas[i];
+            var ck=typeof normalizarChaveTabela==="function"?normalizarChaveTabela(c):String(c).normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/[^a-zA-Z0-9]/g,"").toUpperCase();
+            if(perm.indexOf(ck)!==-1) lista.push(c);
+          }
+          if(!lista.length) lista=ordemComarcas.slice();
+        } else lista=ordemComarcas.slice();
+        return imprimirMultiplasComarcas(lista);
+      }
+      if(typeof mostrarToast==="function") mostrarToast("Impress\u00e3o em preparo","info");
+    } else {
+      if(typeof mostrarToast==="function") mostrarToast("Impress\u00e3o em preparo","info");
     }
-    // Fallback: if Dashboard's imprimirConteudoPermitido exists as global, call it
-    // Otherwise use local fallback (collect allowed comarcas in ordemComarcas order)
-    var perm=null;
-    try{ if(typeof comarcasPermitidasDoUsuario==="function") perm=comarcasPermitidasDoUsuario(); }catch(e){ perm=null; }
-    var lista=[];
-    if(typeof ordemComarcas!=="undefined" && ordemComarcas){
-      if(perm===null){ lista=ordemComarcas.slice(); }
-      else if(Array.isArray(perm) && perm.length){
-        for(var i=0;i<ordemComarcas.length;i++){
-          var c=ordemComarcas[i];
-          var ck=typeof normalizarChaveTabela==="function"?normalizarChaveTabela(c):String(c).normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/[^a-zA-Z0-9]/g,"").toUpperCase();
-          if(perm.indexOf(ck)!==-1) lista.push(c);
-        }
-        if(!lista.length) lista=ordemComarcas.slice();
-      } else lista=ordemComarcas.slice();
-    }
-    if(typeof imprimirMultiplasComarcas==="function") return imprimirMultiplasComarcas(lista);
-    // Ultimate fallback: single comarca print loop
-    for(var j=0;j<lista.length;j++){ if(typeof imprimirComarcaSetoresCards==="function"){ /* aggregated would need multi */ } }
-    if(lista.length===1 && typeof imprimirComarcaSetoresCards==="function") return imprimirComarcaSetoresCards(lista[0]);
-    if(typeof mostrarToast==="function") mostrarToast("Impress\u00e3o em preparo: "+lista.length+" comarcas.","info");
   }catch(e){ console.error(e); }
 }
-
 function imprimirDetalheSetor(){
   return imprimirConsultaPDF();
 }

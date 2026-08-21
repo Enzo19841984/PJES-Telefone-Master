@@ -1416,17 +1416,33 @@ function processarSolicitacaoAPI(id, novoStatus) {
 }
 
 function aprovarSolicitacao(id) {
-  return processarSolicitacaoAPI(
-    id,
-    "APROVADO"
-  );
+  const lock = LockService.getScriptLock();
+  let bloqueado = false;
+  try {
+    lock.waitLock(15000);
+    bloqueado = true;
+    return processarSolicitacaoAPI(
+      id,
+      "APROVADO"
+    );
+  } finally {
+    if (bloqueado) lock.releaseLock();
+  }
 }
 
 function rejeitarSolicitacao(id) {
-  return processarSolicitacaoAPI(
-    id,
-    "REJEITADO"
-  );
+  const lock = LockService.getScriptLock();
+  let bloqueado = false;
+  try {
+    lock.waitLock(15000);
+    bloqueado = true;
+    return processarSolicitacaoAPI(
+      id,
+      "REJEITADO"
+    );
+  } finally {
+    if (bloqueado) lock.releaseLock();
+  }
 }
 
 /**
