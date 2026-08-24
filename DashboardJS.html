@@ -479,10 +479,12 @@ function selecionarSetor(
 }
 
 function atualizarDashboardPublico(telefonesRaw) {
-  // v3.25: filtra por comarcas permitidas (Gestor Conteúdo)
+  // v3.27: filtra por comarcas permitidas APENAS para Gestor Conteúdo — público e Gestor Sistema veem tudo
   let telefones = Array.isArray(telefonesRaw) ? telefonesRaw.slice() : [];
   try{
-    if(typeof comarcasPermitidasDoUsuario==="function"){
+    const perfil = (typeof usuarioAtual !== "undefined" && usuarioAtual) ? String(usuarioAtual.perfil || "") : "";
+    const isGC = perfil === "GESTOR_CONTEUDO" && usuarioAtual && usuarioAtual.logado === true;
+    if(isGC && typeof comarcasPermitidasDoUsuario==="function"){
       const perm = comarcasPermitidasDoUsuario();
       if(perm!==null){
         if(!Array.isArray(perm) || perm.length===0){
