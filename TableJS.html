@@ -713,11 +713,17 @@ function renderizarTabela(
     var _isGCRT = !!(typeof usuarioAtual!=="undefined" && usuarioAtual && usuarioAtual.logado===true && _perfRT==="GESTOR_CONTEUDO");
     if(_isGCRT){
       var _tvRT = document.getElementById("telefones-view");
-      if(_tvRT) _tvRT.classList.add("hidden");
-      var _cvRT = document.getElementById("consulta-telefones-view");
-      if(_cvRT && _cvRT.classList.contains("hidden")){
-        // evita double render: nao mostra tabela, garante mapa se telefones-view estava ativa
-        try{ if(typeof mostrarView==="function") mostrarView("consulta-telefones-view"); }catch(e){}
+      var _cvRT2 = document.getElementById("consulta-telefones-view");
+      // v3.29: só hijacka se estava em telefones-view (evita roubar dashboard/notificações quando GC navega)
+      var _isTelefonesAtiva = _tvRT && !_tvRT.classList.contains("hidden");
+      if(_isTelefonesAtiva){
+        if(_tvRT) _tvRT.classList.add("hidden");
+        if(_cvRT2 && _cvRT2.classList.contains("hidden")){
+          try{ if(typeof mostrarView==="function") mostrarView("consulta-telefones-view"); }catch(e){}
+        }
+      } else {
+        // GC em dashboard/notificações etc: só esconde telefones-view, não força consulta
+        if(_tvRT) _tvRT.classList.add("hidden");
       }
       return;
     }

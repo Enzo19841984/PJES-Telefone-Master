@@ -626,8 +626,10 @@ function atualizarInterfaceUsuario() {
     var gSetor=document.getElementById("grupo-filtro-setor"); if(gSetor) gSetor.style.display = (ehGestorSistema && isTelefones) ? "" : "none";
   } catch(ePrint){}
 
-  if (
-    typeof listaTelefones !==
+  // v3.29: GC never renders tabela — evita hijack dashboard→consulta quando GC navega
+  try{
+    const _isGCNoRender = (typeof usuarioAtual!=="undefined" && usuarioAtual && usuarioAtual.logado===true && String(usuarioAtual.perfil||"").toUpperCase()==="GESTOR_CONTEUDO");
+    if(!_isGCNoRender && typeof listaTelefones !==
       "undefined" &&
     document.getElementById(
       "corpo-tabela-telefones"
@@ -639,6 +641,7 @@ function atualizarInterfaceUsuario() {
       listaTelefones
     );
   }
+  }catch(e){}
 }
 
 function configurarBotaoAcesso(
