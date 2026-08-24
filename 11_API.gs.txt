@@ -666,6 +666,24 @@ function listarSolicitacoes() {
   }
 }
 
+function contarSolicitacoesPendentes() {
+  try {
+    new AuthService().exigirPerfil(CONFIG.PERFIS.GESTOR_SISTEMA);
+    const sheet = DB.solicitacoesAcesso();
+    if (!sheet) return respostaSucesso({ total: 0 });
+    const dados = sheet.getDataRange().getValues();
+    if (dados.length <= 1) return respostaSucesso({ total: 0 });
+    const indices = indicesSolicitacao(dados[0]);
+    const pendentes = dados.slice(1).filter(function(row){
+      return String(row[indices.STATUS] || "").trim().toUpperCase() === "PENDENTE";
+    });
+    return respostaSucesso({ total: pendentes.length });
+  } catch (erro) {
+    registrarErroAPI("CONTAR_SOLICITACOES_PENDENTES", erro);
+    return respostaErro(erro);
+  }
+}
+
 /**
  * Solicitação de acesso (área administrativa).
  *

@@ -486,6 +486,12 @@ function atualizarInterfaceUsuario() {
       "hidden",
       !ehGestorSistema
     );
+    if (ehGestorSistema) {
+      try { atualizarBadgeSolicitacoes(); } catch(e){}
+      try { iniciarPollingSolicitacoes(); } catch(e){}
+    } else {
+      try { pararPollingSolicitacoes(); } catch(e){}
+    }
   }
 
   const menuNotificacoes =
@@ -494,7 +500,7 @@ function atualizarInterfaceUsuario() {
     );
 
   if (menuNotificacoes) {
-    const mostrarNotificacoes = ehGestorSistema || ehGestorConteudo;
+    const mostrarNotificacoes = ehGestorConteudo;
     menuNotificacoes.classList.toggle(
       "hidden",
       !mostrarNotificacoes
@@ -812,11 +818,86 @@ function pararPollingNotificacoes(){
   }catch(e){}
 }
 
+let _pollingSolicitacoesTimer = null;
+function atualizarBadgeSolicitacoes(){
+  try{
+    const badge = document.getElementById("badge-solicitacoes");
+    if(!badge) return;
+    const ehGS = (typeof usuarioAtual!=="undefined" && usuarioAtual && usuarioAtual.logado===true && String(usuarioAtual.perfil||"").toUpperCase()==="GESTOR_SISTEMA");
+    if(!ehGS){
+      badge.classList.add("hidden");
+      badge.textContent="0";
+      return;
+    }
+    if(typeof API==="undefined" || typeof API.contarSolicitacoesPendentes!=="function"){
+      // fallback: try listar and count
+      if(typeof API!=="undefined" && typeof API.listarSolicitacoes==="function"){
+        API.listarSolicitacoes(function(res){
+          try{
+            let total=0;
+            if(res && res.sucesso===true && Array.isArray(res.dados)) total=res.dados.filter(function(s){ return String(s.status||s.STATUS||"").toUpperCase()==="PENDENTE"; }).length;
+            else if(res && Array.isArray(res.dados)) total=res.dados.length;
+            if(total>0){ badge.textContent=total>99?"99+":String(total); badge.classList.remove("hidden"); } else { badge.textContent="0"; badge.classList.add("hidden"); }
+          }catch(e){}
+        }, function(){});
+      }
+      return;
+    }
+    API.contarSolicitacoesPendentes(function(res){
+      try{
+        let total=0;
+        if(res && res.sucesso===true && res.dados){
+          if(typeof res.dados.total==="number") total=res.dados.total;
+          else if(typeof res.dados.count==="number") total=res.dados.count;
+          else if(typeof res.dados==="number") total=res.dados;
+        }
+        if(total>0){ badge.textContent=total>99?"99+":String(total); badge.classList.remove("hidden"); } else { badge.textContent="0"; badge.classList.add("hidden"); }
+      }catch(e){}
+    }, function(){});
+  }catch(e){}
+}
+function iniciarPollingSolicitacoes(){
+  try{
+    if(_pollingSolicitacoesTimer) return;
+    atualizarBadgeSolicitacoes();
+    _pollingSolicitacoesTimer=setInterval(function(){ try{ atualizarBadgeSolicitacoes(); }catch(e){} }, 30000);
+  }catch(e){}
+}
+function pararPollingSolicitacoes(){
+  try{
+    if(_pollingSolicitacoesTimer){ clearInterval(_pollingSolicitacoesTimer); _pollingSolicitacoesTimer=null; }
+  }catch(e){}
+}
+
 function navegarParaNotificacoes(){
   if(typeof mostrarView === "function") mostrarView("notificacoes-view");
   try{ if(typeof carregarNotificacoes === "function") carregarNotificacoes(); }catch(e){}
 }
 
+function resetarTelefonesView(){
+  try{
+    // v3.30: reset Telefones para todos níveis ao sair/entrar
+    if(typeof filtroAtual!=="undefined"){
+      filtroAtual.texto=""; filtroAtual.microrregiao=""; filtroAtual.comarca=""; filtroAtual.tipo=""; filtroAtual.setor="";
+      var c1=document.getElementById("campo-pesquisa"); if(c1) c1.value="";
+      var c2=document.getElementById("filtro-microrregiao"); if(c2) c2.value="";
+      var c3=document.getElementById("filtro-comarca"); if(c3) c3.value="";
+      var c4=document.getElementById("filtro-setor"); if(c4) c4.value="";
+      var c5=document.getElementById("filtro-tipo"); if(c5) c5.value="";
+      if(typeof carregarFiltros==="function") try{ carregarFiltros(); }catch(e){}
+      if(typeof aplicarFiltros==="function") try{ aplicarFiltros(); }catch(e){}
+    }
+    // Consulta view reset
+    var cc=document.getElementById("campo-pesquisa-consulta");
+    if(cc) cc.value="";
+    if(typeof municipioSelecionado!=="undefined") municipioSelecionado="";
+    if(typeof microrregiaoSelecionada!=="undefined") microrregiaoSelecionada="";
+    // GC: ao reentrar, mostrar só permitidas via renderizarComarcas (que já filtra para GC)
+    // Para todos, limpar lista e estado colapsado
+    try{ if(typeof estadoColapsadoComarca!=="undefined") for(var k in estadoColapsadoComarca) delete estadoColapsadoComarca[k]; }catch(e){}
+    // If currently in telefones/consulta, re-render de forma limpa será feito por aoEntrarConsultaTelefonesView ou carregarFiltros
+  }catch(e){}
+}
 function aoEntrarConsultaTelefonesView(){
   try{
     var isGC = typeof usuarioAtual!=="undefined" && usuarioAtual && String(usuarioAtual.perfil||"").toUpperCase()==="GESTOR_CONTEUDO";
@@ -929,6 +1010,16 @@ function mostrarView(viewId) {
 
   } catch (e) {}
 
+  // v3.30: ao sair de Telefones, reset para próximo entrar limpo
+  try{
+    var _prevTelefones = document.getElementById("telefones-view");
+    var _prevConsulta = document.getElementById("consulta-telefones-view");
+    var _wasTelefones = (_prevTelefones && !_prevTelefones.classList.contains("hidden")) || (_prevConsulta && !_prevConsulta.classList.contains("hidden"));
+    var _isAtTelefones = viewId==="telefones-view" || viewId==="consulta-telefones-view";
+    if(_wasTelefones && !_isAtTelefones){
+      try{ resetarTelefonesView(); }catch(e){}
+    }
+  }catch(e){}
   const views =
     document.querySelectorAll(
       ".view, [id$='-view']"
@@ -998,24 +1089,24 @@ function mostrarView(viewId) {
       "function"
   ) {
     carregarSolicitacoes();
+    try{ setTimeout(atualizarBadgeSolicitacoes, 400); }catch(e){}
   }
 
   if (
     viewId ===
-      "notificacoes-view" &&
-    typeof carregarNotificacoes ===
-      "function"
+      "notificacoes-view"
   ) {
-    carregarNotificacoes();
-  }
-
-  if (
-    viewId ===
-      "notificacoes-view" &&
-    typeof atualizarBadgeNotificacoes ===
-      "function"
-  ) {
-    try{ setTimeout(atualizarBadgeNotificacoes, 400); }catch(e){}
+    const _pNotif = (typeof usuarioAtual!=="undefined" && usuarioAtual) ? String(usuarioAtual.perfil||"").toUpperCase() : "";
+    const _logNotif = !!(typeof usuarioAtual!=="undefined" && usuarioAtual && usuarioAtual.logado===true);
+    if(!(_logNotif && _pNotif==="GESTOR_CONTEUDO")){
+      mostrarToast("Acesso restrito a Gestor de Conteúdo.", "warning");
+      viewId="dashboard-view";
+      const _t2=document.getElementById(viewId);
+      if(_t2) _t2.classList.remove("hidden");
+      return;
+    }
+    if(typeof carregarNotificacoes ==="function") carregarNotificacoes();
+    if(typeof atualizarBadgeNotificacoes ==="function") try{ setTimeout(atualizarBadgeNotificacoes, 400); }catch(e){}
   }
 
   if (

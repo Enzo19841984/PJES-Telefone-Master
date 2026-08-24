@@ -36,6 +36,7 @@ Arquivo: Sidebar.html
       <button type="button" id="menu-solicitacoes" class="menu-item hidden" onclick="mostrarView('solicitacoes-view')">
         <span class="icon">👥</span>
         <span>Solicitações de Acesso</span>
+        <span id="badge-solicitacoes" class="badge hidden">0</span>
       </button>
 
       <button type="button" id="menu-notificacoes" class="menu-item hidden" onclick="mostrarView('notificacoes-view')"><span class="icon">🔔</span><span>Notificações</span><span id="badge-notificacoes" class="badge hidden">0</span></button>
@@ -103,7 +104,7 @@ function atualizarVersaoSidebar() {
 
   var versao =
     (typeof window.SISTEMA_VERSAO !== "undefined" && window.SISTEMA_VERSAO) ||
-    "3.29";
+    "3.30";
 
   elemento.textContent = String(versao);
 }

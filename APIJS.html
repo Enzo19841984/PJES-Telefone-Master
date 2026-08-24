@@ -79,6 +79,11 @@ const API = {
       .listarSolicitacoes();
   },
 
+  contarSolicitacoesPendentes(sucesso, erro) {
+    criarRunnerAPI(sucesso, erro)
+      .contarSolicitacoesPendentes();
+  },
+
   aprovarSolicitacao(id, sucesso, erro) {
     criarRunnerAPI(sucesso, erro)
       .aprovarSolicitacao(id);

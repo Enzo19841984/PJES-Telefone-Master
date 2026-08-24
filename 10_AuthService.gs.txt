@@ -406,3 +406,5 @@ if (typeof contarNaoLidas === "undefined") {
     throw new Error("contarNaoLidas stub");
   };
 }
+
+function contarSolicitacoesPendentesAuth(){ return contarSolicitacoesPendentes(); }

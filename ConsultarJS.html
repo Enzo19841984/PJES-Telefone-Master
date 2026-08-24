@@ -452,22 +452,7 @@ function aoClicarMunicipio(nomeMunicipio, feature, layer){
       });
     }
   }catch(eSort){}
-  // v3.25 B/C: Gestor Conteudo filtra comarcasPermitidas no clique do municipio
-  try{
-    var _isGC_filt = typeof usuarioAtual!=="undefined" && usuarioAtual && String(usuarioAtual.perfil||"").toUpperCase()==="GESTOR_CONTEUDO" && usuarioAtual.logado===true;
-    if(_isGC_filt && typeof comarcasPermitidasDoUsuario==="function"){
-      var _permFiltro = comarcasPermitidasDoUsuario();
-      if(Array.isArray(_permFiltro) && _permFiltro.length){
-        var _filtradas=[];
-        for(var _fi=0; _fi<compNomes.length; _fi++){
-          var _cF = compNomes[_fi];
-          var _ckF = typeof normalizarChaveTabela==="function" ? normalizarChaveTabela(_cF) : String(_cF).normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/[^a-zA-Z0-9]/g,"").toUpperCase();
-          if(_permFiltro.indexOf(_ckF)!==-1) _filtradas.push(_cF);
-        }
-        if(_filtradas.length || compNomes.length) compNomes = _filtradas;
-      }
-    }
-  }catch(eFilt){}
+  // v3.30: GC clique município mostra TODAS comarcas daquele município para consulta (com Solicitar/Cancelar), inicial já filtra só permitidas via aoEntrarConsultaTelefonesView/renderizarComarcas
   var temComarcaReal = false;
   try{
     if(typeof ordemComarcas!=="undefined"){
