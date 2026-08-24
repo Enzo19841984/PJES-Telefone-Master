@@ -166,6 +166,26 @@ const API = {
   autenticarConsulta(email, senha, sucesso, erro) {
     criarRunnerAPI(sucesso, erro)
       .autenticarConsulta({ email: email, senha: senha });
+  },
+
+  listarNotificacoes(email, sucesso, erro) {
+    criarRunnerAPI(sucesso, erro)
+      .listarNotificacoes(email);
+  },
+
+  marcarNotificacaoLida(id, sucesso, erro) {
+    criarRunnerAPI(sucesso, erro)
+      .marcarNotificacaoLida(id);
+  },
+
+  marcarTodasLidas(email, sucesso, erro) {
+    criarRunnerAPI(sucesso, erro)
+      .marcarTodasLidas(email);
+  },
+
+  contarNaoLidas(email, sucesso, erro) {
+    criarRunnerAPI(sucesso, erro)
+      .contarNaoLidas(email);
   }
 };
 

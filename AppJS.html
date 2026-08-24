@@ -488,6 +488,25 @@ function atualizarInterfaceUsuario() {
     );
   }
 
+  const menuNotificacoes =
+    document.getElementById(
+      "menu-notificacoes"
+    );
+
+  if (menuNotificacoes) {
+    const mostrarNotificacoes = ehGestorSistema || ehGestorConteudo;
+    menuNotificacoes.classList.toggle(
+      "hidden",
+      !mostrarNotificacoes
+    );
+    if (mostrarNotificacoes) {
+      try { atualizarBadgeNotificacoes(); } catch(e){}
+      try { iniciarPollingNotificacoes(); } catch(e){}
+    } else {
+      try { pararPollingNotificacoes(); } catch(e){}
+    }
+  }
+
   const menuAlteracoes =
     document.getElementById(
       "menu-alteracoes"
@@ -729,6 +748,71 @@ function navegarParaTelefones() {
 
   mostrarView(ehGestor ? "telefones-view" : "consulta-telefones-view");
 }
+let _pollingNotificacoesTimer = null;
+
+function atualizarBadgeNotificacoes(){
+  try{
+    const badge = document.getElementById("badge-notificacoes");
+    if(!badge) return;
+    const ehGestor = (usuarioAtual && usuarioAtual.logado === true && (usuarioAtual.perfil === "GESTOR_SISTEMA" || usuarioAtual.perfil === "GESTOR_CONTEUDO"));
+    if(!ehGestor){
+      badge.classList.add("hidden");
+      badge.textContent = "0";
+      return;
+    }
+    const email = (usuarioAtual && usuarioAtual.email) ? String(usuarioAtual.email).trim() : "";
+    if(!email){
+      badge.classList.add("hidden");
+      badge.textContent = "0";
+      return;
+    }
+    if(typeof API === "undefined" || typeof API.contarNaoLidas !== "function") return;
+    API.contarNaoLidas(email,
+      function(resposta){
+        try{
+          let total = 0;
+          if(resposta && resposta.sucesso === true && resposta.dados){
+            if(typeof resposta.dados.total === "number") total = resposta.dados.total;
+            else if(typeof resposta.dados.count === "number") total = resposta.dados.count;
+            else if(typeof resposta.dados === "number") total = resposta.dados;
+            else if(typeof resposta.dados.naoLidas === "number") total = resposta.dados.naoLidas;
+          }
+          if(total > 0){
+            badge.textContent = total > 99 ? "99+" : String(total);
+            badge.classList.remove("hidden");
+          } else {
+            badge.textContent = "0";
+            badge.classList.add("hidden");
+          }
+        }catch(e){}
+      },
+      function(){}
+    );
+  }catch(e){}
+}
+
+function iniciarPollingNotificacoes(){
+  try{
+    if(_pollingNotificacoesTimer) return;
+    atualizarBadgeNotificacoes();
+    _pollingNotificacoesTimer = setInterval(function(){ try{ atualizarBadgeNotificacoes(); }catch(e){} }, 30000);
+  }catch(e){}
+}
+
+function pararPollingNotificacoes(){
+  try{
+    if(_pollingNotificacoesTimer){
+      clearInterval(_pollingNotificacoesTimer);
+      _pollingNotificacoesTimer = null;
+    }
+  }catch(e){}
+}
+
+function navegarParaNotificacoes(){
+  if(typeof mostrarView === "function") mostrarView("notificacoes-view");
+  try{ if(typeof carregarNotificacoes === "function") carregarNotificacoes(); }catch(e){}
+}
+
 function aoEntrarConsultaTelefonesView(){
   try{
     var isGC = typeof usuarioAtual!=="undefined" && usuarioAtual && String(usuarioAtual.perfil||"").toUpperCase()==="GESTOR_CONTEUDO";
@@ -910,6 +994,24 @@ function mostrarView(viewId) {
       "function"
   ) {
     carregarSolicitacoes();
+  }
+
+  if (
+    viewId ===
+      "notificacoes-view" &&
+    typeof carregarNotificacoes ===
+      "function"
+  ) {
+    carregarNotificacoes();
+  }
+
+  if (
+    viewId ===
+      "notificacoes-view" &&
+    typeof atualizarBadgeNotificacoes ===
+      "function"
+  ) {
+    try{ setTimeout(atualizarBadgeNotificacoes, 400); }catch(e){}
   }
 
   if (

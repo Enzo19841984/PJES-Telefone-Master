@@ -175,6 +175,18 @@ class Database {
     return this.getSheet(CONFIG.SHEETS.LOG);
   }
 
+  notificacoes() {
+    return this.getSheet(CONFIG.SHEETS.NOTIFICACOES);
+  }
+
+  notificacoesOuNulo() {
+    try {
+      return this.getSpreadsheet().getSheetByName(CONFIG.SHEETS.NOTIFICACOES);
+    } catch (erro) {
+      return null;
+    }
+  }
+
   headers(sheet) {
     if (!sheet) {
       throw new Error("Planilha não informada.");

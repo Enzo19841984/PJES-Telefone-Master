@@ -708,6 +708,20 @@ function criarBotaoTabela(
 function renderizarTabela(
   lista
 ) {
+  try{
+    var _perfRT = (typeof usuarioAtual!=="undefined" && usuarioAtual) ? String(usuarioAtual.perfil||"").toUpperCase() : "";
+    var _isGCRT = !!(typeof usuarioAtual!=="undefined" && usuarioAtual && usuarioAtual.logado===true && _perfRT==="GESTOR_CONTEUDO");
+    if(_isGCRT){
+      var _tvRT = document.getElementById("telefones-view");
+      if(_tvRT) _tvRT.classList.add("hidden");
+      var _cvRT = document.getElementById("consulta-telefones-view");
+      if(_cvRT && _cvRT.classList.contains("hidden")){
+        // evita double render: nao mostra tabela, garante mapa se telefones-view estava ativa
+        try{ if(typeof mostrarView==="function") mostrarView("consulta-telefones-view"); }catch(e){}
+      }
+      return;
+    }
+  }catch(e){}
   const tbody =
     document.getElementById(
       "corpo-tabela-telefones"

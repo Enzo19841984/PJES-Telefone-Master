@@ -312,3 +312,97 @@ class AuthService {
     return true;
   }
 }
+/**
+ * ==========================================================
+ * NOTIFICACOES - Extensao AuthService (v3.25)
+ * ==========================================================
+ * Estas funcoes espelham as de 11_API para garantir que
+ * AuthService tambem exponha a API de notificacoes quando
+ * solicitado pelo enunciado.
+ */
+
+AuthService.prototype.criarNotificacao = function(destinatarioEmail, tipo, mensagem, referencia) {
+  return criarNotificacao(destinatarioEmail, tipo, mensagem, referencia);
+};
+
+AuthService.prototype.listarNotificacoes = function(email) {
+  const res = listarNotificacoes(email);
+  return res && res.sucesso ? res.dados : [];
+};
+
+AuthService.prototype.marcarNotificacaoLida = function(id) {
+  return marcarNotificacaoLida(id);
+};
+
+AuthService.prototype.marcarTodasLidas = function(email) {
+  return marcarTodasLidas(email);
+};
+
+AuthService.prototype.contarNaoLidas = function(email) {
+  const res = contarNaoLidas(email);
+  if (res && res.sucesso && res.dados) {
+    return res.dados.total || res.dados.count || 0;
+  }
+  return 0;
+};
+
+/**
+ * Wrappers globais (fallback caso 11_API nao tenha sido carregado).
+ * Se ja existirem, nao sobrescrevem.
+ */
+if (typeof criarNotificacaoAuth === "undefined") {
+  function criarNotificacaoAuth(destinatarioEmail, tipo, mensagem, referencia) {
+    return criarNotificacao(destinatarioEmail, tipo, mensagem, referencia);
+  }
+}
+
+if (typeof listarNotificacoesAuth === "undefined") {
+  function listarNotificacoesAuth(email) {
+    return listarNotificacoes(email);
+  }
+}
+
+if (typeof marcarNotificacaoLidaAuth === "undefined") {
+  function marcarNotificacaoLidaAuth(id) {
+    return marcarNotificacaoLida(id);
+  }
+}
+
+if (typeof marcarTodasLidasAuth === "undefined") {
+  function marcarTodasLidasAuth(email) {
+    return marcarTodasLidas(email);
+  }
+}
+
+if (typeof contarNaoLidasAuth === "undefined") {
+  function contarNaoLidasAuth(email) {
+    return contarNaoLidas(email);
+  }
+}
+
+
+if (typeof criarNotificacao === "undefined") {
+  criarNotificacao = function(destinatarioEmail, tipo, mensagem, referencia) {
+    throw new Error("criarNotificacao stub - 11_API nao carregado");
+  };
+}
+if (typeof listarNotificacoes === "undefined") {
+  listarNotificacoes = function(email) {
+    throw new Error("listarNotificacoes stub");
+  };
+}
+if (typeof marcarNotificacaoLida === "undefined") {
+  marcarNotificacaoLida = function(id) {
+    throw new Error("marcarNotificacaoLida stub");
+  };
+}
+if (typeof marcarTodasLidas === "undefined") {
+  marcarTodasLidas = function(email) {
+    throw new Error("marcarTodasLidas stub");
+  };
+}
+if (typeof contarNaoLidas === "undefined") {
+  contarNaoLidas = function(email) {
+    throw new Error("contarNaoLidas stub");
+  };
+}

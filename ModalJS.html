@@ -247,11 +247,51 @@ function popularModalSetores(micro, comarca, preservar){
   }
   toggleNovoCampo("telefone-setor","telefone-setor-novo");
 }
+// v3.25: ordem canónica Tipo — E-mail sempre último abaixo de WhatsApp
+var ORDEM_TIPO = ["Telefone","Ramal","WhatsApp","E-mail"];
+function normalizarTipo(v){ return String(v||"").trim().toLowerCase(); }
+function indiceOrdemTipo(v){
+  var n=normalizarTipo(v);
+  for(var i=0;i<ORDEM_TIPO.length;i++){ if(normalizarTipo(ORDEM_TIPO[i])===n) return i; }
+  return 999;
+}
+function ordenarTiposLista(lista){
+  var arr=Array.isArray(lista)?lista.slice():Array.from(lista||[]);
+  arr.sort(function(a,b){
+    var ia=indiceOrdemTipo(a), ib=indiceOrdemTipo(b);
+    if(ia!==ib) return ia-ib;
+    return String(a).localeCompare(String(b),"pt-BR");
+  });
+  return arr;
+}
+function popularModalTipo(preservar){
+  var sel=document.getElementById("telefone-tipo"); if(!sel) return;
+  var atual = (preservar!==undefined && preservar!==null && String(preservar).trim()!=="") ? String(preservar).trim() : (sel.value||"");
+  sel.textContent="";
+  var opt0=document.createElement("option"); opt0.value=""; opt0.textContent="Selecione"; sel.appendChild(opt0);
+  ORDEM_TIPO.forEach(function(v){
+    var o=document.createElement("option"); o.value=v; o.textContent=v; sel.appendChild(o);
+  });
+  // Se preservar for tipo fora da ordem (legado), adiciona ao final exceto E-mail continua último
+  if(atual && ORDEM_TIPO.indexOf(atual)===-1){
+    var extra=document.createElement("option"); extra.value=atual; extra.textContent=atual;
+    // Insere antes de E-mail para manter E-mail último
+    var emailOpt=Array.from(sel.options).find(function(o){ return o.value==="E-mail"; });
+    if(emailOpt) sel.insertBefore(extra, emailOpt);
+    else sel.appendChild(extra);
+  }
+  if(atual){
+    var opts=Array.from(sel.options).map(function(o){return o.value;});
+    if(opts.indexOf(atual)!==-1) sel.value=atual;
+  }
+}
 function atualizarVisibilidadeTipo(){
   var tipoEl=document.getElementById("telefone-tipo");
   var tipo= tipoEl ? String(tipoEl.value||"").trim() : "";
   var mapTipo={ "Telefone":"grupo-telefone-numero", "Ramal":"grupo-telefone-ramal", "WhatsApp":"grupo-telefone-whatsapp", "E-mail":"grupo-telefone-email" };
-  Object.keys(mapTipo).forEach(function(k){
+  // v3.25: ordem canónica garante E-mail último; itera via ORDEM_TIPO
+  var ordemVis = (typeof ORDEM_TIPO!=="undefined" && ORDEM_TIPO.length) ? ORDEM_TIPO : Object.keys(mapTipo);
+  ordemVis.forEach(function(k){
     var gid=mapTipo[k];
     var el=document.getElementById(gid);
     if(!el) return;
@@ -294,6 +334,7 @@ function abrirModalNovoTelefone() {
     popularModalMicrorregioes();
     popularModalComarcas("");
     popularModalSetores("", "");
+    if(typeof popularModalTipo==="function") popularModalTipo("");
   }catch(ePop){}
 
   const titulo =
@@ -338,10 +379,10 @@ function preencherFormularioTelefone(telefone) {
     popularModalMicrorregioes(microPre);
     popularModalComarcas(microPre, comarcaPre);
     popularModalSetores(microPre, comarcaPre, setorPre);
-    var tipoSel=document.getElementById("telefone-tipo");
-    if(tipoSel && tipoPre) tipoSel.value=tipoPre;
+    if(typeof popularModalTipo==="function") popularModalTipo(tipoPre);
+    else { var tipoSel=document.getElementById("telefone-tipo"); if(tipoSel && tipoPre) tipoSel.value=tipoPre; }
     atualizarVisibilidadeTipo();
-    if(tipoSel && tipoPre) tipoSel.value=tipoPre;
+    var tipoSel=document.getElementById("telefone-tipo"); if(tipoSel && tipoPre) tipoSel.value=tipoPre;
     // esconde campos Novo ao editar (valores vêm do DB)
     toggleNovoCampo("telefone-microrregiao","telefone-microrregiao-novo");
     toggleNovoCampo("telefone-comarca","telefone-comarca-novo");
@@ -719,6 +760,19 @@ function validarFormularioTelefone(
     return false;
   }
 
+  // v3.25: valida Tipo está na ordem canónica Telefone, Ramal, WhatsApp, E-mail
+  if(dados.tipo && typeof ORDEM_TIPO!=="undefined"){
+    var tipoNorm = String(dados.tipo||"").trim().toLowerCase();
+    var permitido = ORDEM_TIPO.some(function(v){ return String(v).trim().toLowerCase()===tipoNorm; });
+    if(!permitido){
+      exibirNotificacao(
+        "Tipo inválido. Use: Telefone, Ramal, WhatsApp ou E-mail (E-mail sempre último).",
+        "error"
+      );
+      return false;
+    }
+  }
+
   const contatos = [dados.numero, dados.ramal, dados.whatsapp, dados.email].filter(function(v){ return String(v||"").trim() !== ""; });
   if (contatos.length === 0) {
     exibirNotificacao(
@@ -733,6 +787,20 @@ function validarFormularioTelefone(
       "error"
     );
     return false;
+  }
+
+  // valida campo correspondente ao Tipo — ordem canónica
+  if(dados.tipo==="Telefone" && !String(dados.numero||"").trim()){
+    exibirNotificacao("Informe o número do Telefone.", "error"); return false;
+  }
+  if(dados.tipo==="Ramal" && !String(dados.ramal||"").trim()){
+    exibirNotificacao("Informe o Ramal.", "error"); return false;
+  }
+  if(dados.tipo==="WhatsApp" && !String(dados.whatsapp||"").trim()){
+    exibirNotificacao("Informe o WhatsApp.", "error"); return false;
+  }
+  if(dados.tipo==="E-mail" && !String(dados.email||"").trim()){
+    exibirNotificacao("Informe o E-mail.", "error"); return false;
   }
 
   return true;

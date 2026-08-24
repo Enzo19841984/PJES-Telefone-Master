@@ -57,6 +57,10 @@ function instalarSistema() {
       spreadsheet
     );
 
+    criarAbaNotificacoes(
+      spreadsheet
+    );
+
     garantirGestorInicial(
       spreadsheet
     );
@@ -630,6 +634,25 @@ function criarAbaEmailsPendentes(
       "DESTINATARIO",
       "ASSUNTO",
       "CORPO"
+    ]
+  );
+}
+
+/**
+ * Cria a aba NOTIFICACOES.
+ */
+function criarAbaNotificacoes(spreadsheet) {
+  return garantirAbaComCabecalho(
+    spreadsheet,
+    CONFIG.SHEETS.NOTIFICACOES,
+    [
+      "ID",
+      "DestinatarioEmail",
+      "Tipo",
+      "Mensagem",
+      "Lida",
+      "Data",
+      "ReferenciaID"
     ]
   );
 }
