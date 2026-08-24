@@ -255,9 +255,6 @@ function renderizarComarcas() {
     // Para Gestor Conteúdo: permite busca em todas comarcas (consulta liberada), mas impressão permanece bloqueada por permissão
     // Mantém ordemComarcas completa para case-insensitive search; botões Imprimir/PDF já verificam podeEditarComarca
     comarcas = ordemComarcas;
-    } else {
-      comarcas = ordemComarcas;
-    }
   } else if (microrregiaoSelecionada) {
     var _rawMicro = comarcasPorMicrorregiao[microrregiaoSelecionada] || [];
     var _isGCMicro = !!(typeof usuarioAtual !== "undefined" && usuarioAtual && String(usuarioAtual.perfil||"").toUpperCase()==="GESTOR_CONTEUDO");

@@ -125,7 +125,7 @@ function ordenarPorPlanilha(valoresSet, tipo){
   return lista;
 }
 
-let pesquisaTimer = null;ha TELEFONES (sheet order) — preserva ordemComarcas + ordem original
+let pesquisaTimer = null;
 function obterOrdemMicrorregioesPlanilha(){
   var ordem=[];
   var vistos={};
@@ -218,8 +218,6 @@ function ordenarPorPlanilha(valoresSet, tipo){
   }
   return lista;
 }
-
-let pesquisaTimer = null;
 
 // shared with DashboardJS/ConsultarJS — frontend norm variant; GS canonical normalizarChave in 02_Utils.gs.txt
 function normalizarTextoFront(valor) {
