@@ -736,10 +736,11 @@ function fazerLogin() {
  * - Visitante -> aba de Consulta (mapa + lista somente leitura)
  */
 function navegarParaTelefones() {
-  if (typeof usuarioAtual !== "undefined" && usuarioAtual && usuarioAtual.logado === true && usuarioAtual.perfil === "GESTOR_CONTEUDO") {
+  try{ if (typeof usuarioAtual !== "undefined" && usuarioAtual && usuarioAtual.logado === true && String(usuarioAtual.perfil).toUpperCase() === "GESTOR_CONTEUDO") {
     mostrarView("consulta-telefones-view");
     return;
-  }
+  } }catch(e){}
+  try{ if(typeof usuarioAtual!=="undefined" && usuarioAtual && usuarioAtual.logado===true && String(usuarioAtual.perfil).toUpperCase()==="USUARIO_CONSULTA"){ mostrarView("consulta-telefones-view"); return; } }catch(e2){}
   var ehGestor =
     typeof usuarioAtual !== "undefined" &&
     usuarioAtual &&
@@ -947,9 +948,9 @@ function mostrarView(viewId) {
     return;
   }
 
-  target.classList.remove(
+  try{ target.classList.remove(
     "hidden"
-  );
+  ); }catch(e){ try{ target.style.display=""; }catch(e2){} }
 
   document
     .querySelectorAll(".menu-item")

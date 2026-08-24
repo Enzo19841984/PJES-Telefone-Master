@@ -1364,6 +1364,7 @@ function normalizarTextoConsulta(valor){
 
 
 function filtrarSetoresConsulta() {
+  try{ if(typeof renderizarComarcas!=="function" && typeof window.renderizarComarcas!=="function"){ /* fallback: show all */ var all=document.querySelectorAll(".comarca-item,.setor-item"); all.forEach(function(e){ e.style.display=""; }); return; } }catch(e){}
   const campo =
     document.getElementById(
       "campo-pesquisa-consulta"
@@ -1375,7 +1376,7 @@ function filtrarSetoresConsulta() {
     (typeof normalizarTextoConsulta==="function" ? normalizarTextoConsulta(termoRaw) : (typeof normalizarTexto==="function" ? normalizarTexto(termoRaw) : String(termoRaw).normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase().trim()));
 
   if (!termo) {
-    renderizarComarcas();
+    if(typeof renderizarComarcas==="function"){ try{ renderizarComarcas(); }catch(e){} } else { try{ if(typeof normalizarTexto!=="undefined" && document.querySelector(".comarca-item")) document.querySelectorAll(".comarca-item").forEach(function(el){ el.style.display=""; }); var secs=document.querySelectorAll(".setor-item"); secs.forEach(function(s){ s.style.display=""; }); }catch(e2){} }
     return;
   }
 
@@ -1383,7 +1384,7 @@ function filtrarSetoresConsulta() {
   // Corrige fragilidade "no microrregião + termo" e "microrregião + termo": busca deve mostrar
   // TODAS as comarcas que casam em sheet order, ignorando microrregião. Evita loop verificando DOM.
   if (!document.querySelector(".comarca-item")) {
-    renderizarComarcas();
+    if(typeof renderizarComarcas==="function"){ try{ renderizarComarcas(); }catch(e){} }
     return;
   }
 
@@ -1395,7 +1396,7 @@ function filtrarSetoresConsulta() {
         const primeiroDOM = normalizarTexto(document.querySelector(".comarca-item .comarca-nome")?.textContent || "");
         const precisaGlobal = totalDOM !== ordemComarcas.length || (primeiroGlobal && primeiroDOM !== primeiroGlobal);
         if (precisaGlobal) {
-          renderizarComarcas();
+          if(typeof renderizarComarcas==="function"){ try{ renderizarComarcas(); }catch(e){} }
           return;
         }
       }
