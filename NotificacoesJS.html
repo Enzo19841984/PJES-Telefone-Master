@@ -2,8 +2,11 @@
 /**
  * ==========================================================
  * SISTEMA DE TELEFONES TJES
- * Arquivo: NotificacoesJS.html
+ * Arquivo: NotificacoesJS.html v3.32 - permissão próprio usuário
  * ==========================================================
+ * v3.32: Gestor Conteúdo lista apenas próprias notificações;
+ *        sem permissão não exibe erro "outro usuário", mas
+ *        mensagem "Não há notificações não lidas".
  */
 
 function tipoNotificacaoIcone(tipo){
@@ -57,11 +60,25 @@ function carregarNotificacoes(){
   API.listarNotificacoes(email,
     function(resposta){
       if(!resposta || resposta.sucesso !== true){
-        const msg = resposta && resposta.erro ? resposta.erro : "Erro ao carregar notifica\u00e7\u00f5es.";
+        const msgRaw = resposta && resposta.erro ? String(resposta.erro) : "";
+        const msgLower = msgRaw.toLowerCase();
+        // v3.32: GC sem permissão para outro usuário -> trata como vazio (próprio)
+        const ehPermissaoOutro = msgLower.indexOf("outro usu") !== -1 || msgLower.indexOf("sem permiss") !== -1;
+        if(ehPermissaoOutro){
+          renderizarNotificacoes([]);
+          if(btnTodas) btnTodas.style.display = "none";
+          return;
+        }
+        const msg = msgRaw || "Erro ao carregar notifica\u00e7\u00f5es.";
         if(listaEl) listaEl.innerHTML = '<div class="notificacoes-vazio" style="color:#dc2626;">' + escaparHtmlNotificacoes(msg) + '</div>';
         return;
       }
       const dados = Array.isArray(resposta.dados) ? resposta.dados : [];
+      // v3.32: sem notificações -> mensagem amigável
+      if(dados.length === 0){
+        renderizarNotificacoes([]);
+        return;
+      }
       renderizarNotificacoes(dados);
       try{ atualizarBadgeNotificacoes(); }catch(e){}
       if(btnTodas){
@@ -71,6 +88,13 @@ function carregarNotificacoes(){
     },
     function(erro){
       const msg = erro && erro.message ? erro.message : "Falha de conex\u00e3o com o servidor.";
+      const msgLower = String(msg).toLowerCase();
+      const ehPermissaoOutro = msgLower.indexOf("outro usu") !== -1 || msgLower.indexOf("sem permiss") !== -1;
+      if(ehPermissaoOutro){
+        renderizarNotificacoes([]);
+        if(btnTodas) btnTodas.style.display = "none";
+        return;
+      }
       if(listaEl) listaEl.innerHTML = '<div class="notificacoes-vazio" style="color:#dc2626;">' + escaparHtmlNotificacoes(msg) + '</div>';
     }
   );
@@ -86,7 +110,7 @@ function renderizarNotificacoes(lista){
   container.innerHTML = "";
   const dados = Array.isArray(lista) ? lista : [];
   if(dados.length === 0){
-    container.innerHTML = '<div class="notificacoes-vazio">Nenhuma notifica\u00e7\u00e3o encontrada.</div>';
+    container.innerHTML = '<div class="notificacoes-vazio">N\u00e3o h\u00e1 notifica\u00e7\u00f5es n\u00e3o lidas.</div>';
     return;
   }
   dados.forEach(item => {

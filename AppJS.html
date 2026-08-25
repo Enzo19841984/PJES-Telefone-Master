@@ -135,6 +135,8 @@ function iniciarSistema() {
           };
 
           atualizarInterfaceUsuario();
+          // v3.32: garante recarregar Telefones quando comarcas chegam async apos login Google
+          try{ if(typeof recarregarTelefonesAposLogin==="function" && dados && dados.perfil){ var _p=dados.perfil; if(_p==="GESTOR_CONTEUDO"||_p==="GESTOR_SISTEMA") setTimeout(function(){ try{ recarregarTelefonesAposLogin(); }catch(e){} }, 800); } }catch(e){}
 
           /*
            * As comarcas chegam de forma assíncrona:
@@ -182,6 +184,21 @@ function iniciarSistema() {
       function() {}
     );
   }
+  // v3.32: Telefones como aba inicial do Sistema
+  try {
+    setTimeout(function(){
+      try{
+        if (typeof navegarParaTelefones === "function") {
+          navegarParaTelefones();
+        } else if (typeof mostrarView === "function") {
+          var _p = (typeof usuarioAtual !== "undefined" && usuarioAtual) ? String(usuarioAtual.perfil || "") : "";
+          var _log = !!(typeof usuarioAtual !== "undefined" && usuarioAtual && usuarioAtual.logado === true);
+          var _isGS = _log && _p === "GESTOR_SISTEMA";
+          mostrarView(_isGS ? "telefones-view" : "consulta-telefones-view");
+        }
+      }catch(eInitTel){}
+    }, 90);
+  } catch(eInit){}
 }
 
 /**
@@ -394,7 +411,7 @@ function atualizarInterfaceUsuario() {
         textoAcesso,
         ehInstitucional
           ? {
-              texto: "Login",
+              texto: "Acesso Administrativo",
               fundo: "#dbeafe",
               borda: "#93c5fd",
               cor: "#1e40af",
@@ -417,7 +434,7 @@ function atualizarInterfaceUsuario() {
         btnAcesso,
         textoAcesso,
         {
-          texto: "Login",
+          texto: "Acesso Administrativo",
           fundo: "#dbeafe",
           borda: "#93c5fd",
           cor: "#1e40af",
@@ -519,8 +536,8 @@ function atualizarInterfaceUsuario() {
     );
 
   if (menuAlteracoes) {
-    // Registro de Alterações: visível para todos (inclui Usuário de Consulta)
-    menuAlteracoes.classList.remove("hidden");
+    // v3.32: Registro de Alterações oculto para Usuário de Consulta (visitante); GC/GS visível
+    menuAlteracoes.classList.toggle("hidden", ehVisitante);
   }
 
   const menuUsuarios =
@@ -874,6 +891,22 @@ function navegarParaNotificacoes(){
   try{ if(typeof carregarNotificacoes === "function") carregarNotificacoes(); }catch(e){}
 }
 
+// v3.32: helper centralizado para recarregar aba Telefones apos login (consulta ou Google)
+function recarregarTelefonesAposLogin(){
+  try{
+    if(typeof carregarTelefones==="function"){
+      carregarTelefones();
+    } else if(typeof iniciarConsultaTelefones==="function"){
+      iniciarConsultaTelefones();
+    }
+    try{ if(typeof renderizarMapaConsulta==="function") setTimeout(function(){ try{ renderizarMapaConsulta(); }catch(e){} }, 500); }catch(e){}
+    try{ if(typeof tentarInicializarMapa==="function") setTimeout(function(){ try{ tentarInicializarMapa(); }catch(e){} }, 700); }catch(e){}
+    try{ if(typeof sincronizarSolicitacoesPendentes==="function") setTimeout(sincronizarSolicitacoesPendentes, 350); }catch(e){}
+    try{ if(typeof sincronizarSolicitacoesPendentesDashboard==="function") setTimeout(sincronizarSolicitacoesPendentesDashboard, 350); }catch(e){}
+    try{ if(typeof atualizarDashboardPublico==="function" && typeof todosTelefones!=="undefined") setTimeout(function(){ try{ atualizarDashboardPublico(todosTelefones); }catch(e){} }, 650); }catch(e){}
+  }catch(e){ console.error("recarregarTelefonesAposLogin", e); }
+}
+
 function resetarTelefonesView(){
   try{
     // v3.30: reset Telefones para todos níveis ao sair/entrar
@@ -996,7 +1029,11 @@ function mostrarView(viewId) {
       viewId = "dashboard-view";
     }
 
-    // Registro de Alterações: liberado para todos (inclui Usuário de Consulta) — sem bloqueio
+    // v3.32: Registro de Alterações bloqueado para visitante; liberado para Gestor Conteúdo/Sistema
+    if (viewId === "registro-alteracoes-view" && ehVisitante) {
+      mostrarToast("Acesso restrito. Faça login como Gestor para ver o Registro de Alterações.", "warning");
+      viewId = "dashboard-view";
+    }
 
     // login/senha-gerada são públicas — quando já logado, redireciona ao dashboard
     if ((viewId === "login-view" || viewId === "senha-gerada-view") && logado) {
@@ -1066,6 +1103,14 @@ function mostrarView(viewId) {
         );
       }
     });
+
+  // v3.32: Telefones abrange telefones-view e consulta-telefones-view — marca menu-telefones como ativo
+  try {
+    if (viewId === "telefones-view" || viewId === "consulta-telefones-view") {
+      var _btnTel = document.getElementById("menu-telefones");
+      if (_btnTel) _btnTel.classList.add("active");
+    }
+  } catch(eActiveTel) {}
 
   try{ if(typeof atualizarInterfaceUsuario==="function") atualizarInterfaceUsuario(); }catch(eUpd){}
   if(viewId==="consulta-telefones-view"){

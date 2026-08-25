@@ -546,7 +546,10 @@ function aplicarFiltrosLocais(
       filtroAtual.setor
     );
 
-  return dados.filter(item => {
+  // v3.32 pesquisa geral: quando há texto, ignora comarca/microrregiao e busca em todas comarcas em ordem planilha, mantendo destaque do filtro
+  const ehPesquisaGeral = !!texto;
+
+  let filtrados = dados.filter(item => {
     if (texto) {
       const conteudo =
         Object.values(item || {})
@@ -564,7 +567,9 @@ function aplicarFiltrosLocais(
       }
     }
 
+    // v3.32: pesquisa geral ignora filtro de comarca/microrregiao mas mantém destaque visual (filtroAtual permanece preenchido)
     if (
+      !ehPesquisaGeral &&
       microrregiao &&
       normalizarTextoFront(
         item.microrregiao
@@ -574,6 +579,7 @@ function aplicarFiltrosLocais(
     }
 
     if (
+      !ehPesquisaGeral &&
       comarca &&
       normalizarTextoFront(
         item.comarca
@@ -602,6 +608,30 @@ function aplicarFiltrosLocais(
 
     return true;
   });
+
+  // v3.32: em pesquisa geral, ordena resultado pela ordem da planilha (ordemComarcas) para manter ordem planilha
+  if (ehPesquisaGeral && filtrados.length > 1) {
+    try {
+      var ordem = (typeof obterOrdemComarcasPlanilha === "function") ? obterOrdemComarcasPlanilha() : (typeof ordemComarcas !== "undefined" && Array.isArray(ordemComarcas) ? ordemComarcas.slice() : []);
+      if (ordem && ordem.length) {
+        var idxMap = {};
+        for (var _oi = 0; _oi < ordem.length; _oi++) {
+          var _ck = normalizarTextoFront(ordem[_oi]);
+          if (!idxMap.hasOwnProperty(_ck)) idxMap[_ck] = _oi;
+        }
+        filtrados = filtrados.slice().sort(function(a,b){
+          var ca = normalizarTextoFront(a.comarca || "");
+          var cb = normalizarTextoFront(b.comarca || "");
+          var ia = idxMap.hasOwnProperty(ca) ? idxMap[ca] : 9999;
+          var ib = idxMap.hasOwnProperty(cb) ? idxMap[cb] : 9999;
+          if (ia !== ib) return ia - ib;
+          return 0;
+        });
+      }
+    } catch(eOrd) {}
+  }
+
+  return filtrados;
 }
 
 function atualizarTabelaComFiltros() {
@@ -922,6 +952,11 @@ if(typeof blocoCardsHtml!=="function"){
   var blocoCardsHtml = function(titulo, valores){
     var lista = Array.isArray(valores) ? valores.filter(function(v){ var t=String(v||"").trim(); return t && t!=="-" && t!=="–" && t!=="—"; }) : [];
     if(!lista.length) return '<div class="bloco"><div class="bloco-titulo">'+htmlEscCards(titulo)+'</div><div class="vazio">-</div></div>';
+    // v3.32 Endereço com Google Maps
+    if (String(titulo||"").toLowerCase().indexOf("endere") !== -1) {
+      var itens = lista.map(function(v){ var esc = htmlEscCards(v); var href = "https://www.google.com/maps/search/?api=1&query="+encodeURIComponent(String(v||"").trim()); return '<div class="item"><a href="'+href+'" target="_blank" rel="noopener noreferrer" style="color:#2563eb;text-decoration:none;" title="Abrir no Google Maps">'+esc+'</a></div>'; }).join("");
+      return '<div class="bloco"><div class="bloco-titulo">'+htmlEscCards(titulo)+'</div><div class="bloco-lista">'+itens+'</div></div>';
+    }
     var itens = lista.map(function(v){ return '<div class="item">'+htmlEscCards(v)+'</div>'; }).join("");
     return '<div class="bloco"><div class="bloco-titulo">'+htmlEscCards(titulo)+'</div><div class="bloco-lista">'+itens+'</div></div>';
   };

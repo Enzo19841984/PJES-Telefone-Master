@@ -13,12 +13,12 @@ Arquivo: Sidebar.html
     </div>
 
     <nav class="sidebar-menu">
-      <button type="button" id="menu-dashboard" class="menu-item active" onclick="mostrarView('dashboard-view')">
+      <button type="button" id="menu-dashboard" class="menu-item" onclick="mostrarView('dashboard-view')">
         <span class="icon">🏠</span>
         <span>Dashboard</span>
       </button>
 
-      <button type="button" id="menu-telefones" class="menu-item" onclick="navegarParaTelefones()">
+      <button type="button" id="menu-telefones" class="menu-item active" onclick="navegarParaTelefones()">
         <span class="icon">☎</span>
         <span>Telefones</span>
       </button>
@@ -104,7 +104,7 @@ function atualizarVersaoSidebar() {
 
   var versao =
     (typeof window.SISTEMA_VERSAO !== "undefined" && window.SISTEMA_VERSAO) ||
-    "3.31";
+    "3.32";
 
   elemento.textContent = String(versao);
 }

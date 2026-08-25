@@ -314,19 +314,21 @@ class AuthService {
 }
 /**
  * ==========================================================
- * NOTIFICACOES - Extensao AuthService (v3.25)
+ * NOTIFICACOES - Extensao AuthService (v3.32 - permissão próprio usuário)
  * ==========================================================
  * Estas funcoes espelham as de 11_API para garantir que
  * AuthService tambem exponha a API de notificacoes quando
  * solicitado pelo enunciado.
+ * v3.32: Gestor Conteúdo pode listar apenas suas próprias notificações;
+ *        sem notificação exibe "Não há notificações não lidas" (frontend).
  */
 
 AuthService.prototype.criarNotificacao = function(destinatarioEmail, tipo, mensagem, referencia) {
   return criarNotificacao(destinatarioEmail, tipo, mensagem, referencia);
 };
 
-AuthService.prototype.listarNotificacoes = function(email) {
-  const res = listarNotificacoes(email);
+AuthService.prototype.listarNotificacoes = function(email, authDados) {
+  const res = listarNotificacoes(email, authDados);
   return res && res.sucesso ? res.dados : [];
 };
 
@@ -334,12 +336,12 @@ AuthService.prototype.marcarNotificacaoLida = function(id) {
   return marcarNotificacaoLida(id);
 };
 
-AuthService.prototype.marcarTodasLidas = function(email) {
-  return marcarTodasLidas(email);
+AuthService.prototype.marcarTodasLidas = function(email, authDados) {
+  return marcarTodasLidas(email, authDados);
 };
 
-AuthService.prototype.contarNaoLidas = function(email) {
-  const res = contarNaoLidas(email);
+AuthService.prototype.contarNaoLidas = function(email, authDados) {
+  const res = contarNaoLidas(email, authDados);
   if (res && res.sucesso && res.dados) {
     return res.dados.total || res.dados.count || 0;
   }
@@ -357,8 +359,8 @@ if (typeof criarNotificacaoAuth === "undefined") {
 }
 
 if (typeof listarNotificacoesAuth === "undefined") {
-  function listarNotificacoesAuth(email) {
-    return listarNotificacoes(email);
+  function listarNotificacoesAuth(email, authDados) {
+    return listarNotificacoes(email, authDados);
   }
 }
 
@@ -369,14 +371,14 @@ if (typeof marcarNotificacaoLidaAuth === "undefined") {
 }
 
 if (typeof marcarTodasLidasAuth === "undefined") {
-  function marcarTodasLidasAuth(email) {
-    return marcarTodasLidas(email);
+  function marcarTodasLidasAuth(email, authDados) {
+    return marcarTodasLidas(email, authDados);
   }
 }
 
 if (typeof contarNaoLidasAuth === "undefined") {
-  function contarNaoLidasAuth(email) {
-    return contarNaoLidas(email);
+  function contarNaoLidasAuth(email, authDados) {
+    return contarNaoLidas(email, authDados);
   }
 }
 
@@ -387,7 +389,7 @@ if (typeof criarNotificacao === "undefined") {
   };
 }
 if (typeof listarNotificacoes === "undefined") {
-  listarNotificacoes = function(email) {
+  listarNotificacoes = function(email, authDados) {
     throw new Error("listarNotificacoes stub");
   };
 }
@@ -397,12 +399,12 @@ if (typeof marcarNotificacaoLida === "undefined") {
   };
 }
 if (typeof marcarTodasLidas === "undefined") {
-  marcarTodasLidas = function(email) {
+  marcarTodasLidas = function(email, authDados) {
     throw new Error("marcarTodasLidas stub");
   };
 }
 if (typeof contarNaoLidas === "undefined") {
-  contarNaoLidas = function(email) {
+  contarNaoLidas = function(email, authDados) {
     throw new Error("contarNaoLidas stub");
   };
 }

@@ -1495,11 +1495,32 @@ function rejeitarSolicitacao(id) {
  * ==========================================================
  */
 
-function listarHistoricoGeral() {
+function listarHistoricoGeral(authDados) {
   try {
-    new AuthService().exigirPermissao(
-      CONFIG.PERMISSOES.HISTORICO
-    );
+    let usuarioHistPerm = null;
+    try {
+      new AuthService().exigirPermissao(
+        CONFIG.PERMISSOES.HISTORICO
+      );
+      usuarioHistPerm = new AuthService().usuarioAtual();
+    } catch (ePermHist) {
+      if (authDados && typeof authDados === "object") {
+        try {
+          const emailAuthH = normalizarEmail(valorObjeto(authDados, "email", "EMAIL") || "");
+          const senhaAuthH = textoSeguro(valorObjeto(authDados, "senha", "SENHA", "password") || "");
+          if (emailAuthH && senhaAuthH) {
+            const resAuthH = autenticarConsulta({ email: emailAuthH, senha: senhaAuthH });
+            if (resAuthH && resAuthH.sucesso === true && resAuthH.dados) {
+              const pH = String(resAuthH.dados.perfil || "").toUpperCase();
+              if (pH === CONFIG.PERFIS.GESTOR_SISTEMA || pH === CONFIG.PERFIS.GESTOR_CONTEUDO) {
+                usuarioHistPerm = { email: resAuthH.dados.email, perfil: pH, logado: true, ativo: true, comarcas: resAuthH.dados.comarcas || [] };
+              }
+            }
+          }
+        } catch (eAH) {}
+      }
+      if (!usuarioHistPerm || !usuarioHistPerm.logado) throw ePermHist;
+    }
 
     const service =
       new HistoryService();
@@ -2000,10 +2021,10 @@ function listarHistoricoGeral() {
         };
       });
 
+    // v3.32: Gestor Conteúdo vê apenas alterações das comarcas que possui acesso
     let historicoFiltrado = resultado;
 
-    const usuarioHistorico =
-      new AuthService().usuarioAtual();
+    const usuarioHistorico = usuarioHistPerm || new AuthService().usuarioAtual();
 
     if (
       usuarioHistorico.logado &&
@@ -2699,7 +2720,7 @@ function marcarNotificacaoLida(id) {
   }
 }
 
-function marcarTodasLidas(email) {
+function marcarTodasLidas(email, authDados) {
   const lock = LockService.getScriptLock();
   let precisaLiberar = false;
   try {
@@ -2708,13 +2729,33 @@ function marcarTodasLidas(email) {
       precisaLiberar = true;
     }
     let emailAlvo = normalizarEmail(email);
-    const usuario = new AuthService().usuarioAtual();
-    if (!emailAlvo) emailAlvo = normalizarEmail(usuario.email || obterEmailSessaoAPI() || "");
+    let usuario = new AuthService().usuarioAtual();
+    let emailSessao = normalizarEmail(usuario.email || "");
+    if ((!usuario.logado || !emailSessao) && authDados && typeof authDados === "object") {
+      try {
+        const emailAuth = normalizarEmail(valorObjeto(authDados, "email", "EMAIL") || "");
+        const senhaAuth = textoSeguro(valorObjeto(authDados, "senha", "SENHA", "password") || "");
+        if (emailAuth && senhaAuth) {
+          const resAuth = autenticarConsulta({ email: emailAuth, senha: senhaAuth });
+          if (resAuth && resAuth.sucesso === true && resAuth.dados) {
+            usuario = { email: resAuth.dados.email, nome: resAuth.dados.nome, perfil: resAuth.dados.perfil, logado: true, ativo: true, comarcas: resAuth.dados.comarcas || [] };
+            emailSessao = normalizarEmail(usuario.email || "");
+            if (!emailAlvo) emailAlvo = emailSessao;
+          }
+        }
+      } catch (eAuth2) {}
+    }
+    if (!emailAlvo) emailAlvo = normalizarEmail(usuario.email || obterEmailSessaoAPI() || emailSessao || "");
     if (!emailAlvo) throw new Error("E-mail n\u00e3o informado.");
     const ehProprio = normalizarEmail(usuario.email) === emailAlvo;
     const ehGestor = usuario.perfil === CONFIG.PERFIS.GESTOR_SISTEMA;
     if (!ehProprio && !ehGestor) {
-      emailAlvo = normalizarEmail(usuario.email || "");
+      let permitirProprio = false;
+      try {
+        const alvoInfo = new AuthService().buscarUsuario(emailAlvo);
+        if (alvoInfo && alvoInfo.ativo && alvoInfo.perfil === CONFIG.PERFIS.GESTOR_CONTEUDO) permitirProprio = true;
+      } catch (e) {}
+      if (!permitirProprio) emailAlvo = normalizarEmail(usuario.email || emailSessao || "");
     }
     const sheet = obterAbaNotificacoesAPI();
     if (sheet.getLastRow() <= 1) return respostaSucesso({ alteradas: 0 });
@@ -2742,16 +2783,36 @@ function marcarTodasLidas(email) {
   }
 }
 
-function contarNaoLidas(email) {
+function contarNaoLidas(email, authDados) {
   try {
     let emailAlvo = normalizarEmail(email);
-    const usuario = new AuthService().usuarioAtual();
-    if (!emailAlvo) emailAlvo = normalizarEmail(usuario.email || obterEmailSessaoAPI() || "");
+    let usuario = new AuthService().usuarioAtual();
+    let emailSessao = normalizarEmail(usuario.email || "");
+    if ((!usuario.logado || !emailSessao) && authDados && typeof authDados === "object") {
+      try {
+        const emailAuth = normalizarEmail(valorObjeto(authDados, "email", "EMAIL") || "");
+        const senhaAuth = textoSeguro(valorObjeto(authDados, "senha", "SENHA", "password") || "");
+        if (emailAuth && senhaAuth) {
+          const resAuth = autenticarConsulta({ email: emailAuth, senha: senhaAuth });
+          if (resAuth && resAuth.sucesso === true && resAuth.dados) {
+            usuario = { email: resAuth.dados.email, nome: resAuth.dados.nome, perfil: resAuth.dados.perfil, logado: true, ativo: true, comarcas: resAuth.dados.comarcas || [] };
+            emailSessao = normalizarEmail(usuario.email || "");
+            if (!emailAlvo) emailAlvo = emailSessao;
+          }
+        }
+      } catch (eAuth3) {}
+    }
+    if (!emailAlvo) emailAlvo = normalizarEmail(usuario.email || obterEmailSessaoAPI() || emailSessao || "");
     if (!emailAlvo) return respostaSucesso({ total: 0, count: 0 });
     const ehProprio = normalizarEmail(usuario.email) === emailAlvo;
     const ehGestor = usuario.perfil === CONFIG.PERFIS.GESTOR_SISTEMA;
     if (!ehProprio && !ehGestor) {
-      emailAlvo = normalizarEmail(usuario.email || "");
+      let permitirProprio = false;
+      try {
+        const alvoInfo = new AuthService().buscarUsuario(emailAlvo);
+        if (alvoInfo && alvoInfo.ativo && alvoInfo.perfil === CONFIG.PERFIS.GESTOR_CONTEUDO) permitirProprio = true;
+      } catch (e) {}
+      if (!permitirProprio) emailAlvo = normalizarEmail(usuario.email || emailSessao || "");
     }
     const sheet = obterAbaNotificacoesAPI();
     if (sheet.getLastRow() <= 1) return respostaSucesso({ total: 0, count: 0 });

@@ -60,6 +60,7 @@ function escaparJs(valor) {
     .replace(/\r?\n/g, "\\n");
 }
 
+function linkEnderecoDashboard(v){ var s=String(v||"").trim(); if(!s) return ""; return "https://www.google.com/maps/search/?api=1&query="+encodeURIComponent(s); }
 function chaveSegura(valor) {
   return String(valor || "").replace(/[^a-zA-Z0-9]/g, "_");
 }
@@ -480,6 +481,7 @@ function selecionarSetor(
 
 function atualizarDashboardPublico(telefonesRaw) {
   // v3.27: filtra por comarcas permitidas APENAS para Gestor Conteúdo — público e Gestor Sistema veem tudo
+  // v3.32 verificado: filtro correto — somente GC filtra; null=vazia significa todas (compatível com comarcasPermitidasDoUsuario que retorna null para GC sem restricao)
   let telefones = Array.isArray(telefonesRaw) ? telefonesRaw.slice() : [];
   try{
     const perfil = (typeof usuarioAtual !== "undefined" && usuarioAtual) ? String(usuarioAtual.perfil || "") : "";
@@ -488,7 +490,8 @@ function atualizarDashboardPublico(telefonesRaw) {
       const perm = comarcasPermitidasDoUsuario();
       if(perm!==null){
         if(!Array.isArray(perm) || perm.length===0){
-          telefones = [];
+          // v3.32: perm vazio ou invalido para GC => tratar como sem restricao (todas) para manter compatibilidade com TableJS (length 0 => null => todas)
+          // Mantém telefones intacto (sem filtro). Antigo comportamento (telefones=[]) ocultava tudo e foi corrigido.
         } else {
           telefones = telefones.filter(function(item){
             const comarca = String(campoTelefone(item, ["comarca"]) || "").trim();
@@ -870,6 +873,11 @@ function htmlEscCards(v){ return String(v==null?"":v).replace(/&/g,"&amp;").repl
 function blocoCardsHtml(titulo, valores){
   var lista = Array.isArray(valores) ? valores.filter(function(v){ var t=String(v||"").trim(); return t && t!=="-" && t!=="–" && t!=="—"; }) : [];
   if(!lista.length) return '<div class="bloco"><div class="bloco-titulo">'+htmlEscCards(titulo)+'</div><div class="vazio">-</div></div>';
+  // v3.32: Endereço com link para Google Maps
+  if (String(titulo||"").toLowerCase().indexOf("endere") !== -1) {
+    var itens = lista.map(function(v){ var esc = htmlEscCards(v); var href = "https://www.google.com/maps/search/?api=1&query="+encodeURIComponent(String(v||"").trim()); return '<div class="item"><a href="'+href+'" target="_blank" rel="noopener noreferrer" style="color:#2563eb;text-decoration:none;" title="Abrir no Google Maps">'+esc+'</a></div>'; }).join("");
+    return '<div class="bloco"><div class="bloco-titulo">'+htmlEscCards(titulo)+'</div><div class="bloco-lista">'+itens+'</div></div>';
+  }
   var itens = lista.map(function(v){ return '<div class="item">'+htmlEscCards(v)+'</div>'; }).join("");
   return '<div class="bloco"><div class="bloco-titulo">'+htmlEscCards(titulo)+'</div><div class="bloco-lista">'+itens+'</div></div>';
 }

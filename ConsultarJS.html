@@ -290,6 +290,11 @@ function linkTelefoneConsulta(valor) {
   return "tel:+55" + local;
 }
 
+function linkEnderecoConsulta(valor){
+  var v = String(valor||"").trim();
+  if(!v) return "";
+  return "https://www.google.com/maps/search/?api=1&query=" + encodeURIComponent(v);
+}
 function linkEmailConsulta(valor) {
   return (
     "mailto:" +
@@ -332,6 +337,7 @@ function blocoContato(
   html +=
     '<div class="contato-lista">';
 
+  // v3.32: um contato por linha — cada contato em div própria
   lista.forEach(valor => {
     const texto =
       formatador
@@ -346,19 +352,21 @@ function blocoContato(
         criadorLink(valor);
 
       html +=
+        '<div class="contato-item">' +
         '<a class="contato-item-link ' +
         (classe || "") +
         '" href="' +
         escaparConsulta(href) +
         '"' +
         (
-          classe === "whatsapp"
+          classe === "whatsapp" || classe === "endereco"
             ? ' target="_blank" rel="noopener noreferrer"'
             : ""
         ) +
         ">" +
         escaparConsulta(texto) +
-        "</a>";
+        "</a>" +
+        "</div>";
     } else {
       html +=
         '<div class="contato-item">' +
@@ -765,6 +773,7 @@ function construirTooltipMunicipio(nomeMunicipio){
 }
 
 function initMapaLeaflet(containerId, isOverlay){
+  // v3.32 zoom maior: setView 9 e padding 6 para aproximar Espírito Santo
   var cont = document.getElementById(containerId);
   if(!cont) return null;
   if(typeof L==="undefined"){
@@ -772,7 +781,7 @@ function initMapaLeaflet(containerId, isOverlay){
     setTimeout(function(){ if(typeof L!=="undefined") initMapaLeaflet(containerId, isOverlay); }, 1200);
     return null;
   }
-  var mapa = L.map(containerId, { zoomControl:true, attributionControl:true }).setView([-19.5, -40.3], 8);
+  var mapa = L.map(containerId, { zoomControl:true, attributionControl:true }).setView([-19.5, -40.3], 9);
   L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', { maxZoom: 19, attribution: '&copy; OpenStreetMap &copy; CARTO' }).addTo(mapa);
 
   function carregar(){
@@ -824,8 +833,8 @@ function initMapaLeaflet(containerId, isOverlay){
       }
     }).addTo(mapa);
     if(isOverlay) camadaGeoJsonOverlay = layer; else camadaGeoJson = layer;
-    try{ mapa.fitBounds(layer.getBounds(), {padding:[14,14]}); }catch(e2){}
-    setTimeout(function(){ try{ mapa.invalidateSize(); if(!isOverlay) { mapa.fitBounds(layer.getBounds(), {padding:[14,14]}); } }catch(e){} }, 220);
+    try{ mapa.fitBounds(layer.getBounds(), {padding:[6,6]}); }catch(e2){}
+    setTimeout(function(){ try{ mapa.invalidateSize(); if(!isOverlay) { mapa.fitBounds(layer.getBounds(), {padding:[6,6]}); } }catch(e){} }, 220);
     layer.eachLayer(function(l){
       l._nomeNorm = normalizarTexto(String(l.feature.properties.name||"").trim());
     });
@@ -841,7 +850,7 @@ function resetarMapaLeaflet(){
     if(mapaLeaflet && camadaGeoJson){
       municipioSelecionado = "";
       camadaGeoJson.eachLayer(function(l){ camadaGeoJson.resetStyle(l); });
-      mapaLeaflet.fitBounds(camadaGeoJson.getBounds(), {padding:[14,14]});
+      mapaLeaflet.fitBounds(camadaGeoJson.getBounds(), {padding:[6,6]});
       document.querySelectorAll(".comarca-item").forEach(function(el){ el.style.outline=""; });
     }
   }catch(e){}
@@ -888,7 +897,7 @@ function tentarInicializarMapa(){
   if(!mapaEl || mapaEl.offsetParent===null) return false;
   // already has leaflet?
   if(mapaLeaflet && leafletCont && leafletCont.offsetHeight>40) {
-    try{ mapaLeaflet.invalidateSize(); if(camadaGeoJson) mapaLeaflet.fitBounds(camadaGeoJson.getBounds(), {padding:[14,14]}); }catch(e){}
+    try{ mapaLeaflet.invalidateSize(); if(camadaGeoJson) mapaLeaflet.fitBounds(camadaGeoJson.getBounds(), {padding:[6,6]}); }catch(e){}
     return true;
   }
   if(leafletCont && leafletCont.offsetHeight>40){
@@ -1029,7 +1038,7 @@ function abrirMapaConsulta(){
     if(!mapaLeafletOverlay){
       initMapaLeaflet("mapa-leaflet-overlay", true);
     } else {
-      try{ mapaLeafletOverlay.invalidateSize(); if(camadaGeoJsonOverlay) mapaLeafletOverlay.fitBounds(camadaGeoJsonOverlay.getBounds(), {padding:[14,14]}); }catch(e){}
+      try{ mapaLeafletOverlay.invalidateSize(); if(camadaGeoJsonOverlay) mapaLeafletOverlay.fitBounds(camadaGeoJsonOverlay.getBounds(), {padding:[6,6]}); }catch(e){}
     }
   }, 120);
 }
@@ -1177,36 +1186,110 @@ function renderizarDetalhes(
         '</div>' +
       '</div>';
 
-    // Para Gestor Conteúdo com permissão: render por registro com Edit/Delete por linha
+    // v3.32 GC detalhes: endereco e e-mail(s) embaixo do setor com botoes, telefones separados sem repetir
     if(ehGestorConteudoDetalhe && podeEditarDetalhe && Array.isArray(registros) && registros.length){
-      html += '<div class="contatos-publicos">';
-      for(var _ri=0; _ri<registros.length; _ri++){
-        var _reg = registros[_ri];
-        var _tel = campoTelefone(_reg, ["telefone","TELEFONE","numero","NUMERO"]);
-        var _ram = campoTelefone(_reg, ["ramal","RAMAL"]);
-        var _zap = campoTelefone(_reg, ["whatsapp","WHATSAPP","WhatsApp"]);
-        var _mail = campoTelefone(_reg, ["email","EMAIL","E-MAIL","E_MAIL"]);
-        var _end = campoTelefone(_reg, ["endereco","ENDERECO","Endereço"]);
-        var _id = String((_reg.ID||_reg.id||_reg.Id||"")).trim();
-        var _telFmt = _tel ? formatarTelefoneConsulta(_tel) : "-";
-        var _zapFmt = _zap ? formatarWhatsappConsulta(_zap) : "-";
-        var _telLink = _tel ? linkTelefoneConsulta(_tel) : "";
-        var _zapLink = _zap ? linkWhatsappConsulta(_zap) : "";
-        var _mailLink = _mail ? linkEmailConsulta(_mail) : "";
-        html += '<div class="contato-registro" style="border:1px solid #e2e8f0;border-radius:8px;padding:10px 12px;margin-bottom:10px;background:#fff;">';
-        html += '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:8px 12px;font-size:13px;line-height:1.5;">';
-        html += '<div><strong>Telefone:</strong> ' + (_telLink ? '<a class="contato-item-link telefone" href="'+escaparConsulta(_telLink)+'">'+escaparConsulta(_telFmt)+'</a>' : escaparConsulta(_telFmt)) + '</div>';
-        html += '<div><strong>Ramal:</strong> ' + escaparConsulta(_ram||"-") + '</div>';
-        html += '<div><strong>WhatsApp:</strong> ' + (_zapLink ? '<a class="contato-item-link whatsapp" href="'+escaparConsulta(_zapLink)+'" target="_blank" rel="noopener noreferrer">'+escaparConsulta(_zapFmt)+'</a>' : escaparConsulta(_zap||"-")) + '</div>';
-        html += '<div><strong>E-mail:</strong> ' + (_mailLink ? '<a class="contato-item-link email" href="'+escaparConsulta(_mailLink)+'">'+escaparConsulta(_mail||"-")+'</a>' : escaparConsulta(_mail||"-")) + '</div>';
-        html += '<div style="grid-column:1/-1;"><strong>Endereço:</strong> ' + escaparConsulta(_end||"-") + '</div>';
+      // mapeia valor -> primeiro ID que contem aquele valor (para Editar/Excluir)
+      var _mapEnd={}, _mapMail={}, _mapTel={}, _mapRam={}, _mapZap={};
+      for(var _mi=0; _mi<registros.length; _mi++){
+        var _r = registros[_mi];
+        var _idm = String(_r.ID||_r.id||_r.Id||"").trim(); if(!_idm) continue;
+        var _e = String(campoTelefone(_r, ["endereco","ENDERECO","Endereço"])||"").trim(); if(_e && !_mapEnd[_e]) _mapEnd[_e]=_idm;
+        var _m = String(campoTelefone(_r, ["email","EMAIL","E-MAIL","E_MAIL","eMail"])||"").trim(); if(_m && !_mapMail[_m]) _mapMail[_m]=_idm;
+        var _t = String(campoTelefone(_r, ["telefone","TELEFONE","numero","NUMERO"])||"").trim(); if(_t && !_mapTel[_t]) _mapTel[_t]=_idm;
+        var _ra = String(campoTelefone(_r, ["ramal","RAMAL"])||"").trim(); if(_ra && !_mapRam[_ra]) _mapRam[_ra]=_idm;
+        var _wa = String(campoTelefone(_r, ["whatsapp","WHATSAPP","WhatsApp"])||"").trim(); if(_wa && !_mapZap[_wa]) _mapZap[_wa]=_idm;
+      }
+      // --- Endereco + E-mail embaixo do setor (com botoes) ---
+      html += '<div class="gc-detalhes-top" style="margin-bottom:14px;">';
+      // Endereco(s)
+      if(contatos.enderecos && contatos.enderecos.length){
+        html += '<div class="gc-bloco" style="border:1px solid #e2e8f0;border-radius:10px;padding:12px 14px;margin-bottom:10px;background:#f8fafc;">';
+        html += '<div style="font-size:11px;font-weight:800;color:#334155;text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px;">📍 Endereço</div>';
+        for(var _ei=0; _ei<contatos.enderecos.length; _ei++){
+          var _ev = contatos.enderecos[_ei];
+          var _eid = _mapEnd[_ev]||"";
+          var _el = (typeof linkEnderecoConsulta==="function") ? linkEnderecoConsulta(_ev) : "";
+          html += '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 10px;background:#fff;border:1px solid #e2e8f0;border-radius:8px;margin-bottom:6px;">';
+          html += '<span style="flex:1;font-size:13px;color:#0f172a;word-break:break-word;">' + (_el ? '<a href="'+escaparConsulta(_el)+'" target="_blank" rel="noopener noreferrer" style="color:#2563eb;text-decoration:none;">'+escaparConsulta(_ev)+'</a>' : escaparConsulta(_ev)) + '</span>';
+          html += '<span style="display:flex;gap:6px;flex-shrink:0;">';
+          if(_eid){ html += '<button type="button" class="btn btn-primary" style="padding:4px 9px;font-size:11px;" onclick="abrirEditarTelefone(\''+escaparJs(_eid)+'\')" title="Editar endereço">✏️ Editar</button><button type="button" class="btn btn-danger" style="padding:4px 9px;font-size:11px;" onclick="abrirExcluir(\''+escaparJs(_eid)+'\')" title="Excluir">🗑️ Excluir</button>'; }
+          html += '</span></div>';
+        }
         html += '</div>';
-        if(_id){
-          html += '<div style="display:flex;gap:8px;margin-top:8px;"><button type="button" class="btn btn-primary" style="padding:4px 10px;font-size:11px;" onclick="abrirEditarTelefone(\''+escaparJs(_id)+'\')">\u270F\uFE0F Editar</button><button type="button" class="btn btn-danger" style="padding:4px 10px;font-size:11px;" onclick="abrirExcluir(\''+escaparJs(_id)+'\')">\uD83D\uDDD1\uFE0F Excluir</button></div>';
+      } else {
+        html += '<div class="gc-bloco" style="border:1px dashed #cbd5e1;border-radius:10px;padding:10px 14px;margin-bottom:10px;background:#f8fafc;"><div style="font-size:11px;font-weight:800;color:#334155;text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;">📍 Endereço</div><div style="font-size:13px;color:#94a3b8;">-</div></div>';
+      }
+      // E-mail(s)
+      if(contatos.emails && contatos.emails.length){
+        html += '<div class="gc-bloco" style="border:1px solid #e2e8f0;border-radius:10px;padding:12px 14px;margin-bottom:10px;background:#f8fafc;">';
+        html += '<div style="font-size:11px;font-weight:800;color:#334155;text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px;">✉️ E-mail'+(contatos.emails.length>1?'s':'')+'</div>';
+        for(var _emi=0; _emi<contatos.emails.length; _emi++){
+          var _mv = contatos.emails[_emi];
+          var _mid = _mapMail[_mv]||"";
+          var _ml = linkEmailConsulta(_mv);
+          html += '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 10px;background:#fff;border:1px solid #e2e8f0;border-radius:8px;margin-bottom:6px;">';
+          html += '<span style="flex:1;font-size:13px;word-break:break-word;"><a class="contato-item-link email" href="'+escaparConsulta(_ml)+'" style="color:#2563eb;font-weight:600;text-decoration:none;">'+escaparConsulta(_mv)+'</a></span>';
+          html += '<span style="display:flex;gap:6px;flex-shrink:0;">';
+          if(_mid){ html += '<button type="button" class="btn btn-primary" style="padding:4px 9px;font-size:11px;" onclick="abrirEditarTelefone(\''+escaparJs(_mid)+'\')" title="Editar e-mail">✏️ Editar</button><button type="button" class="btn btn-danger" style="padding:4px 9px;font-size:11px;" onclick="abrirExcluir(\''+escaparJs(_mid)+'\')" title="Excluir">🗑️ Excluir</button>'; }
+          html += '</span></div>';
+        }
+        html += '</div>';
+      } else {
+        html += '<div class="gc-bloco" style="border:1px dashed #cbd5e1;border-radius:10px;padding:10px 14px;margin-bottom:10px;background:#f8fafc;"><div style="font-size:11px;font-weight:800;color:#334155;text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;">✉️ E-mail</div><div style="font-size:13px;color:#94a3b8;">-</div></div>';
+      }
+      html += '</div>';
+      // --- Telefones/Ramal/WhatsApp separados (nao repetir endereco/email) ---
+      html += '<div class="contatos-publicos gc-telefones-separados" style="display:grid;gap:10px;">';
+      if(contatos.telefones && contatos.telefones.length){
+        html += '<div class="gc-bloco" style="border:1px solid #e2e8f0;border-radius:10px;padding:12px 14px;background:#fff;">';
+        html += '<div style="font-size:11px;font-weight:800;color:#334155;text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px;">📞 Telefone</div>';
+        for(var _ti=0; _ti<contatos.telefones.length; _ti++){
+          var _tv = contatos.telefones[_ti];
+          var _tid = _mapTel[_tv]||"";
+          var _tf = formatarTelefoneConsulta(_tv);
+          var _tl = linkTelefoneConsulta(_tv);
+          html += '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:7px 10px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;margin-bottom:6px;">';
+          html += '<span style="flex:1;font-size:13px;"><a class="contato-item-link telefone" href="'+escaparConsulta(_tl)+'" style="color:#1d4ed8;font-weight:600;text-decoration:none;">'+escaparConsulta(_tf)+'</a></span>';
+          html += '<span style="display:flex;gap:6px;flex-shrink:0;">';
+          if(_tid){ html += '<button type="button" class="btn btn-primary" style="padding:4px 9px;font-size:11px;" onclick="abrirEditarTelefone(\''+escaparJs(_tid)+'\')">✏️ Editar</button><button type="button" class="btn btn-danger" style="padding:4px 9px;font-size:11px;" onclick="abrirExcluir(\''+escaparJs(_tid)+'\')">🗑️ Excluir</button>'; }
+          html += '</span></div>';
         }
         html += '</div>';
       }
-      html += "</div>";
+      if(contatos.ramais && contatos.ramais.length){
+        html += '<div class="gc-bloco" style="border:1px solid #e2e8f0;border-radius:10px;padding:12px 14px;background:#fff;">';
+        html += '<div style="font-size:11px;font-weight:800;color:#334155;text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px;">☎️ Ramal</div>';
+        for(var _ri2=0; _ri2<contatos.ramais.length; _ri2++){
+          var _rv = contatos.ramais[_ri2];
+          var _rid = _mapRam[_rv]||"";
+          html += '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:7px 10px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;margin-bottom:6px;">';
+          html += '<span style="flex:1;font-size:13px;color:#0f172a;font-weight:600;">'+escaparConsulta(_rv)+'</span>';
+          html += '<span style="display:flex;gap:6px;flex-shrink:0;">';
+          if(_rid){ html += '<button type="button" class="btn btn-primary" style="padding:4px 9px;font-size:11px;" onclick="abrirEditarTelefone(\''+escaparJs(_rid)+'\')">✏️ Editar</button><button type="button" class="btn btn-danger" style="padding:4px 9px;font-size:11px;" onclick="abrirExcluir(\''+escaparJs(_rid)+'\')">🗑️ Excluir</button>'; }
+          html += '</span></div>';
+        }
+        html += '</div>';
+      }
+      if(contatos.whatsapps && contatos.whatsapps.length){
+        html += '<div class="gc-bloco" style="border:1px solid #e2e8f0;border-radius:10px;padding:12px 14px;background:#fff;">';
+        html += '<div style="font-size:11px;font-weight:800;color:#334155;text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px;">💬 WhatsApp</div>';
+        for(var _wi=0; _wi<contatos.whatsapps.length; _wi++){
+          var _wv = contatos.whatsapps[_wi];
+          var _wid = _mapZap[_wv]||"";
+          var _wf = formatarWhatsappConsulta(_wv);
+          var _wl = linkWhatsappConsulta(_wv);
+          html += '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:7px 10px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;margin-bottom:6px;">';
+          html += '<span style="flex:1;font-size:13px;"><a class="contato-item-link whatsapp" href="'+escaparConsulta(_wl)+'" target="_blank" rel="noopener noreferrer" style="color:#16a34a;font-weight:600;text-decoration:none;">'+escaparConsulta(_wf)+'</a></span>';
+          html += '<span style="display:flex;gap:6px;flex-shrink:0;">';
+          if(_wid){ html += '<button type="button" class="btn btn-primary" style="padding:4px 9px;font-size:11px;" onclick="abrirEditarTelefone(\''+escaparJs(_wid)+'\')">✏️ Editar</button><button type="button" class="btn btn-danger" style="padding:4px 9px;font-size:11px;" onclick="abrirExcluir(\''+escaparJs(_wid)+'\')">🗑️ Excluir</button>'; }
+          html += '</span></div>';
+        }
+        html += '</div>';
+      }
+      if((!contatos.telefones||!contatos.telefones.length) && (!contatos.ramais||!contatos.ramais.length) && (!contatos.whatsapps||!contatos.whatsapps.length)){
+        html += '<div style="padding:12px 14px;border:1px dashed #cbd5e1;border-radius:10px;background:#f8fafc;color:#94a3b8;font-size:13px;">Nenhum telefone/ramal/WhatsApp cadastrado.</div>';
+      }
+      html += '</div>';
     } else {
       html +=
       '<div class="contatos-publicos">' +
@@ -1214,7 +1297,7 @@ function renderizarDetalhes(
         blocoContato("Ramal", contatos.ramais) +
         blocoContato("WhatsApp", contatos.whatsapps, formatarWhatsappConsulta, linkWhatsappConsulta, "whatsapp") +
         blocoContato("E-mail", contatos.emails, null, linkEmailConsulta, "email") +
-        blocoContato("Endereço", contatos.enderecos) +
+        blocoContato("Endereço", contatos.enderecos, null, linkEnderecoConsulta, "endereco") +
       "</div>";
     }
   }
