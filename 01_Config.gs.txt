@@ -8,7 +8,7 @@
 const CONFIG = {
   SISTEMA: {
     NOME: "Sistema Inteligente de Gestão de Telefones do Poder Judiciário do Estado do Espírito Santo",
-    VERSAO: "3.33"
+    VERSAO: "3.34"
   },
 
   WEB_APP: {
@@ -46,7 +46,16 @@ const CONFIG = {
   },
 
   SHEETS: {
+    // Modelo normalizado v3.34 — novo (MUNICIPIOS/UNIDADES/SETORES/CONTATOS)
+    MUNICIPIOS: "MUNICIPIOS",
+    UNIDADES: "UNIDADES",
+    SETORES: "SETORES",
+    CONTATOS: "CONTATOS",
+    TELEFONES_UTEIS: "TELEFONES_UTEIS",
+    ACESSOS_UNIDADES: "ACESSOS_UNIDADES",
+    // Legado flat — mantido para compatibilidade (join virtual)
     TELEFONES: "TELEFONES",
+    TELEFONES_LEGADO: "TELEFONES",
     USUARIOS: "USUARIOS",
     CONFIGURACAO: "CONFIGURACAO",
     HISTORICO: "HISTORICO",
@@ -61,6 +70,14 @@ const CONFIG = {
     GESTOR_SISTEMA: "GESTOR_SISTEMA",
     GESTOR_CONTEUDO: "GESTOR_CONTEUDO",
     USUARIO_CONSULTA: "USUARIO_CONSULTA"
+  },
+
+  NIVEIS: {
+    NIVEL_1: 1,
+    NIVEL_2: 2,
+    NIVEL_3: 3,
+    POR_PERFIL: { "USUARIO_CONSULTA": 1, "GESTOR_CONTEUDO": 2, "GESTOR_SISTEMA": 3 },
+    POR_NIVEL: { "1": "USUARIO_CONSULTA", "2": "GESTOR_CONTEUDO", "3": "GESTOR_SISTEMA" }
   },
 
   PERMISSOES: {
@@ -86,7 +103,14 @@ const CONFIG = {
     STATUS: "Status",
     OBSERVACAO: "Observacao",
     CRIADO: "CriadoEm",
-    ATUALIZADO: "AtualizadoEm"
+    ATUALIZADO: "AtualizadoEm",
+    // Normalizado v3.34 — CONTATOS
+    CONTATOS_ID: "ID",
+    SETOR_ID: "SETOR_ID",
+    DESCRICAO: "DESCRICAO",
+    VALOR: "VALOR",
+    MUNICIPIO_ID: "MUNICIPIO_ID",
+    UNIDADE_ID: "UNIDADE_ID"
   },
 
   CACHE: {
