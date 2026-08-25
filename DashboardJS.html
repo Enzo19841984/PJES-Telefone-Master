@@ -100,14 +100,16 @@ function iniciarConsultaTelefones() {
       processarDados();
       preencherFiltroMicrorregiao();
       renderizarComarcas();
+      try{ if(typeof popularFiltrosConsulta==="function") popularFiltrosConsulta(); }catch(e){}
       try{ sincronizarSolicitacoesPendentesDashboard(); }catch(e){}
       atualizarDashboardPublico(todosTelefones);
 
-      // v3.25 guard: Gestor Conteudo nunca injeta tabela (remove race/double render)
-      var _isGC_dash = !!(typeof usuarioAtual!=="undefined" && usuarioAtual && String(usuarioAtual.perfil||"").toUpperCase()==="GESTOR_CONTEUDO" && usuarioAtual.logado===true);
+      // v3.33 guard: Gestor Conteudo e Gestor Sistema usam mapa (remove race/double render) — GS com todas comarcas
+      var _isGC_dash = !!(typeof usuarioAtual!=="undefined" && usuarioAtual && (String(usuarioAtual.perfil||"").toUpperCase()==="GESTOR_CONTEUDO" || String(usuarioAtual.perfil||"").toUpperCase()==="GESTOR_SISTEMA") && usuarioAtual.logado===true);
       if(_isGC_dash){
         var _tvDash = document.getElementById("telefones-view");
         if(_tvDash) _tvDash.classList.add("hidden");
+        // v3.33 GS via mapa: garante que tabela nao seja injetada no arranque; tabela acessivel via navegarParaTabelaTelefones()
       } else {
         if (typeof carregarFiltros === "function") {
           try { carregarFiltros(); } catch (e) { console.error("carregarFiltros:", e); }
@@ -883,13 +885,14 @@ function blocoCardsHtml(titulo, valores){
 }
 function cardSetorHtmlComarca(comarca, setor, grupos){
   var g = grupos || {telefones:[],ramais:[],whatsapps:[],emails:[],enderecos:[]};
+  // v3.33 ordem canônica Endereco(Top), Telefone, Ramal, WhatsApp, E-mail(Bottom)
   return '<div class="setor-card">'
     + '<h3>'+htmlEscCards(setor)+'</h3>'
+    + blocoCardsHtml("Endere\u00e7o", g.enderecos)
     + blocoCardsHtml("Telefone", g.telefones)
     + blocoCardsHtml("Ramal", g.ramais)
     + blocoCardsHtml("WhatsApp", g.whatsapps)
     + blocoCardsHtml("E-mail", g.emails)
-    + blocoCardsHtml("Endere\u00e7o", g.enderecos)
     + '</div>';
 }
 function imprimirComarcaSetoresCards(comarcaNome){

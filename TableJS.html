@@ -745,7 +745,11 @@ function renderizarTabela(
   try{
     var _perfRT = (typeof usuarioAtual!=="undefined" && usuarioAtual) ? String(usuarioAtual.perfil||"").toUpperCase() : "";
     var _isGCRT = !!(typeof usuarioAtual!=="undefined" && usuarioAtual && usuarioAtual.logado===true && _perfRT==="GESTOR_CONTEUDO");
-    if(_isGCRT){
+    var _isGSRT = !!(typeof usuarioAtual!=="undefined" && usuarioAtual && usuarioAtual.logado===true && _perfRT==="GESTOR_SISTEMA");
+    // v3.33 GS usa mapa como GC, mas permite tabela via navegarParaTabelaTelefones() (flag bypass)
+    if(window.__gsTabelaLiberada){
+      try{ window.__gsTabelaLiberada=false; }catch(e){}
+    } else if(_isGCRT || _isGSRT){
       var _tvRT = document.getElementById("telefones-view");
       var _cvRT2 = document.getElementById("consulta-telefones-view");
       // v3.29: só hijacka se estava em telefones-view (evita roubar dashboard/notificações quando GC navega)
@@ -756,7 +760,7 @@ function renderizarTabela(
           try{ if(typeof mostrarView==="function") mostrarView("consulta-telefones-view"); }catch(e){}
         }
       } else {
-        // GC em dashboard/notificações etc: só esconde telefones-view, não força consulta
+        // GC/GS em dashboard/notificações etc: só esconde telefones-view, não força consulta
         if(_tvRT) _tvRT.classList.add("hidden");
       }
       return;
@@ -2286,7 +2290,23 @@ function agruparContatosDoSetor(registros){
   const vistos={ telefones:new Set(), ramais:new Set(), whatsapps:new Set(), emails:new Set(), enderecos:new Set() };
   function contatoPreenchido(v){ var s=String(v||"").trim(); return s!=="" && s!=="-" && s!=="\u2013" && s!=="\u2014"; }
   function _getCampo(item, nomes){ try{ if(typeof campoTelefone==="function") return campoTelefone(item, nomes); }catch(e){} try{ if(typeof valorCampoTelefone==="function"){ for(var _ii=0;_ii<nomes.length;_ii++){ var _vv=valorCampoTelefone(item, nomes[_ii]); if(String(_vv||"").trim()) return _vv; } return ""; } }catch(e2){} return ""; }
-  function adicionar(tipo, valor){ var t=String(valor||"").trim(); if(!contatoPreenchido(t) || vistos[tipo].has(t)) return; vistos[tipo].add(t); resultado[tipo].push(t); }
+  function adicionar(tipo, valor){
+    var texto=String(valor||"").trim(); if(!contatoPreenchido(texto)) return;
+    let partes=[texto];
+    if(tipo!=="enderecos"){
+      if(/[,;\n]/.test(texto)){
+        partes=texto.split(/[,;\n]+/).map(function(s){ return String(s||"").trim(); }).filter(contatoPreenchido);
+        if(tipo==="telefones"||tipo==="ramais"||tipo==="whatsapps"){
+          let exp=[]; partes.forEach(function(p){ if(p.indexOf("/")!==-1){ p.split("/").forEach(function(sub){ let t=String(sub||"").trim(); if(contatoPreenchido(t)) exp.push(t); }); } else exp.push(p); }); partes=exp;
+        }
+      } else if((tipo==="telefones"||tipo==="ramais"||tipo==="whatsapps") && texto.indexOf("/")!==-1){
+        partes=texto.split("/").map(function(s){ return String(s||"").trim(); }).filter(contatoPreenchido);
+      }
+    }
+    partes.forEach(function(part){
+      var t=String(part||"").trim(); if(!contatoPreenchido(t) || vistos[tipo].has(t)) return; vistos[tipo].add(t); resultado[tipo].push(t);
+    });
+  }
   (Array.isArray(registros)?registros:[]).forEach(function(registro){
     adicionar("telefones", _getCampo(registro, ["telefone","TELEFONE","numero","NUMERO"]));
     adicionar("ramais", _getCampo(registro, ["ramal","RAMAL"]));

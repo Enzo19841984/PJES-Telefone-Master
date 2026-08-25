@@ -135,15 +135,38 @@ function agruparContatosDoSetor(registros) {
     const texto =
       String(valor || "").trim();
 
-    if (
-      !contatoPreenchido(texto) ||
-      vistos[tipo].has(texto)
-    ) {
+    if (!contatoPreenchido(texto)) {
       return;
     }
-
-    vistos[tipo].add(texto);
-    resultado[tipo].push(texto);
+    // v3.33: split múltiplos valores separados por vírgula/ponto-vírgula/quebra (telefone/ramal/whatsapp/email) — cada valor em linha própria com botão próprio
+    let partes = [texto];
+    if (tipo !== "enderecos") {
+      if (/[,;\n]/.test(texto)) {
+        partes = texto.split(/[,;\n]+/).map(function(s){ return String(s||"").trim(); }).filter(contatoPreenchido);
+        if (tipo === "telefones" || tipo === "ramais" || tipo === "whatsapps") {
+          let expandido = [];
+          partes.forEach(function(part){
+            if (part.indexOf("/") !== -1) {
+              part.split("/").forEach(function(sub){
+                let t = String(sub||"").trim();
+                if (contatoPreenchido(t)) expandido.push(t);
+              });
+            } else {
+              expandido.push(part);
+            }
+          });
+          partes = expandido;
+        }
+      } else if ((tipo === "telefones" || tipo === "ramais" || tipo === "whatsapps") && texto.indexOf("/") !== -1) {
+        partes = texto.split("/").map(function(s){ return String(s||"").trim(); }).filter(contatoPreenchido);
+      }
+    }
+    partes.forEach(function(part){
+      const t = String(part||"").trim();
+      if (!contatoPreenchido(t) || vistos[tipo].has(t)) return;
+      vistos[tipo].add(t);
+      resultado[tipo].push(t);
+    });
   }
 
   (
@@ -313,7 +336,9 @@ function blocoContato(
   valores,
   formatador,
   criadorLink,
-  classe
+  classe,
+  mapaIds,
+  podeEditar
 ) {
   const lista =
     Array.isArray(valores)
@@ -337,18 +362,35 @@ function blocoContato(
   html +=
     '<div class="contato-lista">';
 
-  // v3.32: um contato por linha — cada contato em div própria
+  // v3.33: um contato por linha — cada valor em div própria com botão próprio se permitido (GC/GS)
   lista.forEach(valor => {
     const texto =
       formatador
         ? formatador(valor)
         : valor;
-
-    if (
+    const href =
+      (criadorLink && contatoPreenchido(valor))
+        ? criadorLink(valor)
+        : "";
+    const idDoValor = (mapaIds && mapaIds[valor]) ? String(mapaIds[valor]||"").trim() : "";
+    const comBotao = !!(podeEditar && idDoValor);
+    if (comBotao) {
+      html +=
+        '<div class="contato-item" style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:7px 10px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;margin-bottom:6px;">' +
+        '<span style="flex:1;font-size:13px;word-break:break-word;">' +
+        (href
+          ? '<a class="contato-item-link ' + (classe || "") + '" href="' + escaparConsulta(href) + '"' + (classe === "whatsapp" || classe === "endereco" ? ' target="_blank" rel="noopener noreferrer"' : "") + ' style="color:' + (classe==="whatsapp" ? "#16a34a" : classe==="email" ? "#2563eb" : classe==="telefone" ? "#1d4ed8" : "#0f172a") + ';font-weight:600;text-decoration:none;">' + escaparConsulta(texto) + "</a>"
+          : '<span style="color:#0f172a;font-weight:600;">' + escaparConsulta(texto) + "</span>") +
+        "</span>" +
+        '<span style="display:flex;gap:6px;flex-shrink:0;">' +
+        '<button type="button" class="btn btn-primary" style="padding:4px 9px;font-size:11px;" onclick="abrirEditarTelefone(\'' + escaparJs(idDoValor) + '\')" title="Editar ' + escaparConsulta(titulo) + '">\u270F\uFE0F Editar</button>' +
+        '<button type="button" class="btn btn-danger" style="padding:4px 9px;font-size:11px;" onclick="abrirExcluir(\'' + escaparJs(idDoValor) + '\')" title="Excluir">\uD83D\uDDD1\uFE0F Excluir</button>' +
+        "</span></div>";
+    } else if (
       criadorLink &&
       contatoPreenchido(valor)
     ) {
-      const href =
+      const href2 =
         criadorLink(valor);
 
       html +=
@@ -356,7 +398,7 @@ function blocoContato(
         '<a class="contato-item-link ' +
         (classe || "") +
         '" href="' +
-        escaparConsulta(href) +
+        escaparConsulta(href2) +
         '"' +
         (
           classe === "whatsapp" || classe === "endereco"
@@ -854,6 +896,24 @@ function resetarMapaLeaflet(){
       document.querySelectorAll(".comarca-item").forEach(function(el){ el.style.outline=""; });
     }
   }catch(e){}
+  // v3.33 — Redefinir recarrega lista como aoEntrarConsultaTelefonesView (para todos os perfis)
+  try{
+    var cc=document.getElementById("campo-pesquisa-consulta"); if(cc) cc.value="";
+    var fC=document.getElementById("filtro-comarca-consulta"); if(fC) fC.value="";
+    var fS=document.getElementById("filtro-setor-consulta"); if(fS) fS.value="";
+    if(typeof microrregiaoSelecionada!=="undefined") microrregiaoSelecionada="";
+    var selMicro=document.getElementById("filtro-microrregiao-consulta"); if(selMicro) selMicro.value="";
+    try{ if(typeof estadoColapsadoComarca!=="undefined") for(var k in estadoColapsadoComarca) delete estadoColapsadoComarca[k]; }catch(e){}
+    try{ municipioSelecionado=""; }catch(e){}
+    try{ if(typeof popularFiltrosConsulta==="function") popularFiltrosConsulta(); else if(typeof atualizarFiltroSetorConsultaPorComarca==="function") atualizarFiltroSetorConsultaPorComarca(); }catch(e){}
+    if(typeof renderizarComarcas==="function"){
+      try{ renderizarComarcas(); }catch(e){}
+    } else if(typeof aoEntrarConsultaTelefonesView==="function"){
+      try{ aoEntrarConsultaTelefonesView(); }catch(e){}
+    }
+    try{ if(typeof filtrarListaConsultaPorComarcaSetor==="function") setTimeout(function(){ try{ filtrarListaConsultaPorComarcaSetor(); }catch(e){} }, 30); }catch(e){}
+    try{ if(typeof destacarMapaPorBusca==="function") destacarMapaPorBusca(""); }catch(e){}
+  }catch(e){}
 }
 
 function destacarMapaPorBusca(termoNorm){
@@ -1114,16 +1174,19 @@ function renderizarDetalhes(
 
   if (!possuiContato) {
     // Mesmo sem contatos agrupados, Gestor Conteúdo com permissão pode adicionar
+    // v3.33 vazio: GC e GS podem adicionar
     var _ehGCVazio = false;
     var _podeVazio = false;
     try{
-      _ehGCVazio = typeof usuarioAtual!=="undefined" && usuarioAtual && usuarioAtual.logado===true && String(usuarioAtual.perfil||"").toUpperCase()==="GESTOR_CONTEUDO";
+      var _perfilVazio = typeof usuarioAtual!=="undefined" && usuarioAtual ? String(usuarioAtual.perfil||"").toUpperCase().trim() : "";
+      _ehGCVazio = typeof usuarioAtual!=="undefined" && usuarioAtual && usuarioAtual.logado===true && (_perfilVazio==="GESTOR_CONTEUDO" || _perfilVazio==="GESTOR_SISTEMA");
       if(_ehGCVazio && typeof podeEditarComarca==="function") _podeVazio = podeEditarComarca(comarca);
       else if(_ehGCVazio && typeof comarcasPermitidasDoUsuario==="function"){
         var _allowV = comarcasPermitidasDoUsuario();
         if(_allowV===null) _podeVazio = true;
         else if(Array.isArray(_allowV)){ var _ckV = String(comarca||"").normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/[^a-zA-Z0-9]/g,"").toUpperCase(); _podeVazio = _allowV.indexOf(_ckV)!==-1; }
-      }
+        if(_perfilVazio==="GESTOR_SISTEMA") _podeVazio = true;
+      } else if(_perfilVazio==="GESTOR_SISTEMA") _podeVazio = true;
     }catch(e){ _podeVazio=false; }
     var _btnAddVazio = "";
     if(_ehGCVazio && _podeVazio){
@@ -1147,18 +1210,28 @@ function renderizarDetalhes(
       '</div>' +
       '<p>Nenhum contato disponível.</p>';
   } else {
+    // v3.33: GC e GS com mesma regra de ordem e por-linha com botões individuais
+    var perfilDetalheNorm = "";
+    try{ perfilDetalheNorm = typeof usuarioAtual!=="undefined" && usuarioAtual ? String(usuarioAtual.perfil||"").toUpperCase().trim() : ""; }catch(e){ perfilDetalheNorm=""; }
+    var ehEditorDetalhe = false;
     var ehGestorConteudoDetalhe = false;
     var podeEditarDetalhe = false;
     try{
-      ehGestorConteudoDetalhe = typeof usuarioAtual!=="undefined" && usuarioAtual && usuarioAtual.logado===true && String(usuarioAtual.perfil||"").toUpperCase()==="GESTOR_CONTEUDO";
-      if(ehGestorConteudoDetalhe && typeof podeEditarComarca==="function") podeEditarDetalhe = podeEditarComarca(comarca);
-      else if(ehGestorConteudoDetalhe && typeof comarcasPermitidasDoUsuario==="function"){
+      ehEditorDetalhe = typeof usuarioAtual!=="undefined" && usuarioAtual && usuarioAtual.logado===true && (perfilDetalheNorm==="GESTOR_CONTEUDO" || perfilDetalheNorm==="GESTOR_SISTEMA");
+      ehGestorConteudoDetalhe = ehEditorDetalhe; // compat retro: mantém alias usado no vazio
+      if(ehEditorDetalhe && typeof podeEditarComarca==="function") podeEditarDetalhe = podeEditarComarca(comarca);
+      else if(ehEditorDetalhe && typeof comarcasPermitidasDoUsuario==="function"){
         var allowD = comarcasPermitidasDoUsuario();
         if(allowD===null) podeEditarDetalhe = true;
         else if(Array.isArray(allowD)){
           var ckD = String(comarca||"").normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/[^a-zA-Z0-9]/g,"").toUpperCase();
           podeEditarDetalhe = allowD.indexOf(ckD)!==-1;
         }
+      }
+      // Gestor do Sistema sempre pode editar (podeEditarComarca retorna true via null), mas garante
+      if(perfilDetalheNorm==="GESTOR_SISTEMA" && typeof podeEditarComarca==="function"){
+        try{ podeEditarDetalhe = podeEditarComarca(comarca); }catch(e2){ podeEditarDetalhe = true; }
+        if(!podeEditarDetalhe) podeEditarDetalhe = true;
       }
     }catch(e){ podeEditarDetalhe=false; }
 
@@ -1186,25 +1259,40 @@ function renderizarDetalhes(
         '</div>' +
       '</div>';
 
-    // v3.32 GC detalhes: endereco e e-mail(s) embaixo do setor com botoes, telefones separados sem repetir
-    if(ehGestorConteudoDetalhe && podeEditarDetalhe && Array.isArray(registros) && registros.length){
-      // mapeia valor -> primeiro ID que contem aquele valor (para Editar/Excluir)
+    // v3.33 ordem canônica Endereco(Top), Telefone, Ramal, WhatsApp, E-mail(Bottom) para UC/GC/GS; GC/GS cada valor com Editar/Excluir próprio
+    if(ehEditorDetalhe && podeEditarDetalhe && Array.isArray(registros) && registros.length){
+      // v3.33: mapeia valor -> primeiro ID (com split por vírgula/ponto-vírgula para cada contato ter botão próprio)
       var _mapEnd={}, _mapMail={}, _mapTel={}, _mapRam={}, _mapZap={};
+      function _splitParaMapa(tipo, raw){
+        let s = String(raw||"").trim(); if(!s) return [];
+        if(tipo==="enderecos") return [s];
+        let partes=[s];
+        if(/[,;\n]/.test(s)){
+          partes=s.split(/[,;\n]+/).map(function(v){ return String(v||"").trim(); }).filter(function(v){ return v && v!=="-" && v!=="–" && v!=="—"; });
+          if(tipo==="telefones"||tipo==="ramais"||tipo==="whatsapps"){
+            let exp=[]; partes.forEach(function(p){ if(p.indexOf("/")!==-1){ p.split("/").forEach(function(sub){ let t=String(sub||"").trim(); if(t && t!=="-" && t!=="–" && t!=="—") exp.push(t); }); } else exp.push(p); }); partes=exp;
+          }
+        } else if((tipo==="telefones"||tipo==="ramais"||tipo==="whatsapps") && s.indexOf("/")!==-1){
+          partes=s.split("/").map(function(v){ return String(v||"").trim(); }).filter(function(v){ return v && v!=="-" && v!=="–" && v!=="—"; });
+        }
+        return partes;
+      }
       for(var _mi=0; _mi<registros.length; _mi++){
         var _r = registros[_mi];
         var _idm = String(_r.ID||_r.id||_r.Id||"").trim(); if(!_idm) continue;
-        var _e = String(campoTelefone(_r, ["endereco","ENDERECO","Endereço"])||"").trim(); if(_e && !_mapEnd[_e]) _mapEnd[_e]=_idm;
-        var _m = String(campoTelefone(_r, ["email","EMAIL","E-MAIL","E_MAIL","eMail"])||"").trim(); if(_m && !_mapMail[_m]) _mapMail[_m]=_idm;
-        var _t = String(campoTelefone(_r, ["telefone","TELEFONE","numero","NUMERO"])||"").trim(); if(_t && !_mapTel[_t]) _mapTel[_t]=_idm;
-        var _ra = String(campoTelefone(_r, ["ramal","RAMAL"])||"").trim(); if(_ra && !_mapRam[_ra]) _mapRam[_ra]=_idm;
-        var _wa = String(campoTelefone(_r, ["whatsapp","WHATSAPP","WhatsApp"])||"").trim(); if(_wa && !_mapZap[_wa]) _mapZap[_wa]=_idm;
+        _splitParaMapa("enderecos", campoTelefone(_r, ["endereco","ENDERECO","Endereço"])).forEach(function(v){ if(v && !_mapEnd[v]) _mapEnd[v]=_idm; });
+        _splitParaMapa("emails", campoTelefone(_r, ["email","EMAIL","E-MAIL","E_MAIL","eMail"])).forEach(function(v){ if(v && !_mapMail[v]) _mapMail[v]=_idm; });
+        _splitParaMapa("telefones", campoTelefone(_r, ["telefone","TELEFONE","numero","NUMERO"])).forEach(function(v){ if(v && !_mapTel[v]) _mapTel[v]=_idm; });
+        _splitParaMapa("ramais", campoTelefone(_r, ["ramal","RAMAL"])).forEach(function(v){ if(v && !_mapRam[v]) _mapRam[v]=_idm; });
+        _splitParaMapa("whatsapps", campoTelefone(_r, ["whatsapp","WHATSAPP","WhatsApp"])).forEach(function(v){ if(v && !_mapZap[v]) _mapZap[v]=_idm; });
       }
       // --- Endereco + E-mail embaixo do setor (com botoes) ---
-      html += '<div class="gc-detalhes-top" style="margin-bottom:14px;">';
-      // Endereco(s)
+      // v3.33 ordem canônica com botões individuais por valor (sem agrupar com vírgula)
+      html += '<div class="contatos-publicos gc-detalhes-ordenado" style="display:grid;gap:10px;">';
+      // Endereco (top)
       if(contatos.enderecos && contatos.enderecos.length){
-        html += '<div class="gc-bloco" style="border:1px solid #e2e8f0;border-radius:10px;padding:12px 14px;margin-bottom:10px;background:#f8fafc;">';
-        html += '<div style="font-size:11px;font-weight:800;color:#334155;text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px;">📍 Endereço</div>';
+        html += '<div class="gc-bloco" style="border:1px solid #e2e8f0;border-radius:10px;padding:12px 14px;background:#f8fafc;">';
+        html += '<div style="font-size:11px;font-weight:800;color:#334155;text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px;">\uD83D\uDCCD Endereço</div>';
         for(var _ei=0; _ei<contatos.enderecos.length; _ei++){
           var _ev = contatos.enderecos[_ei];
           var _eid = _mapEnd[_ev]||"";
@@ -1212,37 +1300,17 @@ function renderizarDetalhes(
           html += '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 10px;background:#fff;border:1px solid #e2e8f0;border-radius:8px;margin-bottom:6px;">';
           html += '<span style="flex:1;font-size:13px;color:#0f172a;word-break:break-word;">' + (_el ? '<a href="'+escaparConsulta(_el)+'" target="_blank" rel="noopener noreferrer" style="color:#2563eb;text-decoration:none;">'+escaparConsulta(_ev)+'</a>' : escaparConsulta(_ev)) + '</span>';
           html += '<span style="display:flex;gap:6px;flex-shrink:0;">';
-          if(_eid){ html += '<button type="button" class="btn btn-primary" style="padding:4px 9px;font-size:11px;" onclick="abrirEditarTelefone(\''+escaparJs(_eid)+'\')" title="Editar endereço">✏️ Editar</button><button type="button" class="btn btn-danger" style="padding:4px 9px;font-size:11px;" onclick="abrirExcluir(\''+escaparJs(_eid)+'\')" title="Excluir">🗑️ Excluir</button>'; }
+          if(_eid){ html += '<button type="button" class="btn btn-primary" style="padding:4px 9px;font-size:11px;" onclick="abrirEditarTelefone(\''+escaparJs(_eid)+'\')" title="Editar endereço">\u270F\uFE0F Editar</button><button type="button" class="btn btn-danger" style="padding:4px 9px;font-size:11px;" onclick="abrirExcluir(\''+escaparJs(_eid)+'\')" title="Excluir">\uD83D\uDDD1\uFE0F Excluir</button>'; }
           html += '</span></div>';
         }
         html += '</div>';
       } else {
-        html += '<div class="gc-bloco" style="border:1px dashed #cbd5e1;border-radius:10px;padding:10px 14px;margin-bottom:10px;background:#f8fafc;"><div style="font-size:11px;font-weight:800;color:#334155;text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;">📍 Endereço</div><div style="font-size:13px;color:#94a3b8;">-</div></div>';
+        html += '<div class="gc-bloco" style="border:1px dashed #cbd5e1;border-radius:10px;padding:10px 14px;background:#f8fafc;"><div style="font-size:11px;font-weight:800;color:#334155;text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;">\uD83D\uDCCD Endereço</div><div style="font-size:13px;color:#94a3b8;">-</div></div>';
       }
-      // E-mail(s)
-      if(contatos.emails && contatos.emails.length){
-        html += '<div class="gc-bloco" style="border:1px solid #e2e8f0;border-radius:10px;padding:12px 14px;margin-bottom:10px;background:#f8fafc;">';
-        html += '<div style="font-size:11px;font-weight:800;color:#334155;text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px;">✉️ E-mail'+(contatos.emails.length>1?'s':'')+'</div>';
-        for(var _emi=0; _emi<contatos.emails.length; _emi++){
-          var _mv = contatos.emails[_emi];
-          var _mid = _mapMail[_mv]||"";
-          var _ml = linkEmailConsulta(_mv);
-          html += '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 10px;background:#fff;border:1px solid #e2e8f0;border-radius:8px;margin-bottom:6px;">';
-          html += '<span style="flex:1;font-size:13px;word-break:break-word;"><a class="contato-item-link email" href="'+escaparConsulta(_ml)+'" style="color:#2563eb;font-weight:600;text-decoration:none;">'+escaparConsulta(_mv)+'</a></span>';
-          html += '<span style="display:flex;gap:6px;flex-shrink:0;">';
-          if(_mid){ html += '<button type="button" class="btn btn-primary" style="padding:4px 9px;font-size:11px;" onclick="abrirEditarTelefone(\''+escaparJs(_mid)+'\')" title="Editar e-mail">✏️ Editar</button><button type="button" class="btn btn-danger" style="padding:4px 9px;font-size:11px;" onclick="abrirExcluir(\''+escaparJs(_mid)+'\')" title="Excluir">🗑️ Excluir</button>'; }
-          html += '</span></div>';
-        }
-        html += '</div>';
-      } else {
-        html += '<div class="gc-bloco" style="border:1px dashed #cbd5e1;border-radius:10px;padding:10px 14px;margin-bottom:10px;background:#f8fafc;"><div style="font-size:11px;font-weight:800;color:#334155;text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;">✉️ E-mail</div><div style="font-size:13px;color:#94a3b8;">-</div></div>';
-      }
-      html += '</div>';
-      // --- Telefones/Ramal/WhatsApp separados (nao repetir endereco/email) ---
-      html += '<div class="contatos-publicos gc-telefones-separados" style="display:grid;gap:10px;">';
+      // Telefone
       if(contatos.telefones && contatos.telefones.length){
         html += '<div class="gc-bloco" style="border:1px solid #e2e8f0;border-radius:10px;padding:12px 14px;background:#fff;">';
-        html += '<div style="font-size:11px;font-weight:800;color:#334155;text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px;">📞 Telefone</div>';
+        html += '<div style="font-size:11px;font-weight:800;color:#334155;text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px;">\uD83D\uDCDE Telefone</div>';
         for(var _ti=0; _ti<contatos.telefones.length; _ti++){
           var _tv = contatos.telefones[_ti];
           var _tid = _mapTel[_tv]||"";
@@ -1251,28 +1319,30 @@ function renderizarDetalhes(
           html += '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:7px 10px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;margin-bottom:6px;">';
           html += '<span style="flex:1;font-size:13px;"><a class="contato-item-link telefone" href="'+escaparConsulta(_tl)+'" style="color:#1d4ed8;font-weight:600;text-decoration:none;">'+escaparConsulta(_tf)+'</a></span>';
           html += '<span style="display:flex;gap:6px;flex-shrink:0;">';
-          if(_tid){ html += '<button type="button" class="btn btn-primary" style="padding:4px 9px;font-size:11px;" onclick="abrirEditarTelefone(\''+escaparJs(_tid)+'\')">✏️ Editar</button><button type="button" class="btn btn-danger" style="padding:4px 9px;font-size:11px;" onclick="abrirExcluir(\''+escaparJs(_tid)+'\')">🗑️ Excluir</button>'; }
+          if(_tid){ html += '<button type="button" class="btn btn-primary" style="padding:4px 9px;font-size:11px;" onclick="abrirEditarTelefone(\''+escaparJs(_tid)+'\')">\u270F\uFE0F Editar</button><button type="button" class="btn btn-danger" style="padding:4px 9px;font-size:11px;" onclick="abrirExcluir(\''+escaparJs(_tid)+'\')">\uD83D\uDDD1\uFE0F Excluir</button>'; }
           html += '</span></div>';
         }
         html += '</div>';
       }
+      // Ramal
       if(contatos.ramais && contatos.ramais.length){
         html += '<div class="gc-bloco" style="border:1px solid #e2e8f0;border-radius:10px;padding:12px 14px;background:#fff;">';
-        html += '<div style="font-size:11px;font-weight:800;color:#334155;text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px;">☎️ Ramal</div>';
+        html += '<div style="font-size:11px;font-weight:800;color:#334155;text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px;">\u260E\uFE0F Ramal</div>';
         for(var _ri2=0; _ri2<contatos.ramais.length; _ri2++){
           var _rv = contatos.ramais[_ri2];
           var _rid = _mapRam[_rv]||"";
           html += '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:7px 10px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;margin-bottom:6px;">';
           html += '<span style="flex:1;font-size:13px;color:#0f172a;font-weight:600;">'+escaparConsulta(_rv)+'</span>';
           html += '<span style="display:flex;gap:6px;flex-shrink:0;">';
-          if(_rid){ html += '<button type="button" class="btn btn-primary" style="padding:4px 9px;font-size:11px;" onclick="abrirEditarTelefone(\''+escaparJs(_rid)+'\')">✏️ Editar</button><button type="button" class="btn btn-danger" style="padding:4px 9px;font-size:11px;" onclick="abrirExcluir(\''+escaparJs(_rid)+'\')">🗑️ Excluir</button>'; }
+          if(_rid){ html += '<button type="button" class="btn btn-primary" style="padding:4px 9px;font-size:11px;" onclick="abrirEditarTelefone(\''+escaparJs(_rid)+'\')">\u270F\uFE0F Editar</button><button type="button" class="btn btn-danger" style="padding:4px 9px;font-size:11px;" onclick="abrirExcluir(\''+escaparJs(_rid)+'\')">\uD83D\uDDD1\uFE0F Excluir</button>'; }
           html += '</span></div>';
         }
         html += '</div>';
       }
+      // WhatsApp
       if(contatos.whatsapps && contatos.whatsapps.length){
         html += '<div class="gc-bloco" style="border:1px solid #e2e8f0;border-radius:10px;padding:12px 14px;background:#fff;">';
-        html += '<div style="font-size:11px;font-weight:800;color:#334155;text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px;">💬 WhatsApp</div>';
+        html += '<div style="font-size:11px;font-weight:800;color:#334155;text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px;">\uD83D\uDCAC WhatsApp</div>';
         for(var _wi=0; _wi<contatos.whatsapps.length; _wi++){
           var _wv = contatos.whatsapps[_wi];
           var _wid = _mapZap[_wv]||"";
@@ -1281,23 +1351,42 @@ function renderizarDetalhes(
           html += '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:7px 10px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;margin-bottom:6px;">';
           html += '<span style="flex:1;font-size:13px;"><a class="contato-item-link whatsapp" href="'+escaparConsulta(_wl)+'" target="_blank" rel="noopener noreferrer" style="color:#16a34a;font-weight:600;text-decoration:none;">'+escaparConsulta(_wf)+'</a></span>';
           html += '<span style="display:flex;gap:6px;flex-shrink:0;">';
-          if(_wid){ html += '<button type="button" class="btn btn-primary" style="padding:4px 9px;font-size:11px;" onclick="abrirEditarTelefone(\''+escaparJs(_wid)+'\')">✏️ Editar</button><button type="button" class="btn btn-danger" style="padding:4px 9px;font-size:11px;" onclick="abrirExcluir(\''+escaparJs(_wid)+'\')">🗑️ Excluir</button>'; }
+          if(_wid){ html += '<button type="button" class="btn btn-primary" style="padding:4px 9px;font-size:11px;" onclick="abrirEditarTelefone(\''+escaparJs(_wid)+'\')">\u270F\uFE0F Editar</button><button type="button" class="btn btn-danger" style="padding:4px 9px;font-size:11px;" onclick="abrirExcluir(\''+escaparJs(_wid)+'\')">\uD83D\uDDD1\uFE0F Excluir</button>'; }
           html += '</span></div>';
         }
         html += '</div>';
       }
-      if((!contatos.telefones||!contatos.telefones.length) && (!contatos.ramais||!contatos.ramais.length) && (!contatos.whatsapps||!contatos.whatsapps.length)){
-        html += '<div style="padding:12px 14px;border:1px dashed #cbd5e1;border-radius:10px;background:#f8fafc;color:#94a3b8;font-size:13px;">Nenhum telefone/ramal/WhatsApp cadastrado.</div>';
+      // E-mail (bottom)
+      if(contatos.emails && contatos.emails.length){
+        html += '<div class="gc-bloco" style="border:1px solid #e2e8f0;border-radius:10px;padding:12px 14px;background:#f8fafc;">';
+        html += '<div style="font-size:11px;font-weight:800;color:#334155;text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px;">\u2709\uFE0F E-mail'+(contatos.emails.length>1?'s':'')+'</div>';
+        for(var _emi=0; _emi<contatos.emails.length; _emi++){
+          var _mv = contatos.emails[_emi];
+          var _mid = _mapMail[_mv]||"";
+          var _ml = linkEmailConsulta(_mv);
+          html += '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 10px;background:#fff;border:1px solid #e2e8f0;border-radius:8px;margin-bottom:6px;">';
+          html += '<span style="flex:1;font-size:13px;word-break:break-word;"><a class="contato-item-link email" href="'+escaparConsulta(_ml)+'" style="color:#2563eb;font-weight:600;text-decoration:none;">'+escaparConsulta(_mv)+'</a></span>';
+          html += '<span style="display:flex;gap:6px;flex-shrink:0;">';
+          if(_mid){ html += '<button type="button" class="btn btn-primary" style="padding:4px 9px;font-size:11px;" onclick="abrirEditarTelefone(\''+escaparJs(_mid)+'\')" title="Editar e-mail">\u270F\uFE0F Editar</button><button type="button" class="btn btn-danger" style="padding:4px 9px;font-size:11px;" onclick="abrirExcluir(\''+escaparJs(_mid)+'\')" title="Excluir">\uD83D\uDDD1\uFE0F Excluir</button>'; }
+          html += '</span></div>';
+        }
+        html += '</div>';
+      } else {
+        html += '<div class="gc-bloco" style="border:1px dashed #cbd5e1;border-radius:10px;padding:10px 14px;background:#f8fafc;"><div style="font-size:11px;font-weight:800;color:#334155;text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;">\u2709\uFE0F E-mail</div><div style="font-size:13px;color:#94a3b8;">-</div></div>';
+      }
+      if((!contatos.telefones||!contatos.telefones.length) && (!contatos.ramais||!contatos.ramais.length) && (!contatos.whatsapps||!contatos.whatsapps.length) && (!contatos.emails||!contatos.emails.length) && (!contatos.enderecos||!contatos.enderecos.length)){
+        html += '<div style="padding:12px 14px;border:1px dashed #cbd5e1;border-radius:10px;background:#f8fafc;color:#94a3b8;font-size:13px;">Nenhum contato cadastrado.</div>';
       }
       html += '</div>';
     } else {
+      // v3.33 ordem canônica UC sem botões mas por linha (mesma ordem GC/GS)
       html +=
       '<div class="contatos-publicos">' +
+        blocoContato("Endereço", contatos.enderecos, null, linkEnderecoConsulta, "endereco") +
         blocoContato("Telefone", contatos.telefones, formatarTelefoneConsulta, linkTelefoneConsulta, "telefone") +
         blocoContato("Ramal", contatos.ramais) +
         blocoContato("WhatsApp", contatos.whatsapps, formatarWhatsappConsulta, linkWhatsappConsulta, "whatsapp") +
         blocoContato("E-mail", contatos.emails, null, linkEmailConsulta, "email") +
-        blocoContato("Endereço", contatos.enderecos, null, linkEnderecoConsulta, "endereco") +
       "</div>";
     }
   }
@@ -1432,6 +1521,13 @@ function normalizarTextoConsulta(valor){
 
 
 function filtrarSetoresConsulta() {
+  // v3.33: se novos filtros existem, delegar para funcao unificada (preserva pesquisa geral + ordem planilha)
+  try{
+    var hasNovos=document.getElementById("filtro-comarca-consulta")||document.getElementById("filtro-setor-consulta");
+    if(hasNovos && typeof filtrarListaConsultaPorComarcaSetor==="function" && !window._filtrarConsultaEmExecucao){
+      return filtrarListaConsultaPorComarcaSetor();
+    }
+  }catch(e){}
   try{ if(typeof renderizarComarcas!=="function" && typeof window.renderizarComarcas!=="function"){ /* fallback: show all */ var all=document.querySelectorAll(".comarca-item,.setor-item"); all.forEach(function(e){ e.style.display=""; }); return; } }catch(e){}
   const campo =
     document.getElementById(
@@ -1555,6 +1651,240 @@ function filtrarSetoresConsulta() {
 }
 
 /* ==========================================================
+ * v3.33 — Filtros Comarca/Setor para Usuario de Consulta
+ * ========================================================== */
+function popularFiltrosConsulta(){
+  try{
+    var selC=document.getElementById("filtro-comarca-consulta");
+    var selS=document.getElementById("filtro-setor-consulta");
+    if(!selC || !selS) return;
+    var ordem=(typeof ordemComarcas!=="undefined" && Array.isArray(ordemComarcas) && ordemComarcas.length) ? ordemComarcas.slice() : [];
+    if(!ordem.length && typeof listaTelefones!=="undefined" && Array.isArray(listaTelefones)){
+      var vistos={};
+      listaTelefones.forEach(function(it){ var c=String(it.comarca||"").trim(); if(c && !vistos[c]){ vistos[c]=true; ordem.push(c); } });
+    }
+    if(!ordem.length && typeof setoresPorComarca!=="undefined"){
+      ordem=Object.keys(setoresPorComarca);
+    }
+    try{
+      var isGC=typeof usuarioAtual!=="undefined" && usuarioAtual && String(usuarioAtual.perfil||"").toUpperCase()==="GESTOR_CONTEUDO" && usuarioAtual.logado===true;
+      if(isGC && typeof comarcasPermitidasDoUsuario==="function"){
+        var perm=comarcasPermitidasDoUsuario();
+        if(Array.isArray(perm) && perm.length){
+          var filtrada=[];
+          for(var i=0;i<ordem.length;i++){
+            var cc=ordem[i];
+            var ck=typeof normalizarChaveTabela==="function"?normalizarChaveTabela(cc):String(cc).normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/[^a-zA-Z0-9]/g,"").toUpperCase();
+            if(perm.indexOf(ck)!==-1) filtrada.push(cc);
+          }
+          if(filtrada.length) ordem=filtrada;
+        }
+      }
+    }catch(e){}
+    var valCAntes=String(selC.value||"");
+    selC.textContent="";
+    var optCTodos=document.createElement("option"); optCTodos.value=""; optCTodos.textContent="Todas as comarcas";
+    selC.appendChild(optCTodos);
+    ordem.forEach(function(c){
+      var o=document.createElement("option");
+      o.value=String(c);
+      o.textContent=String(c);
+      selC.appendChild(o);
+    });
+    if(valCAntes && Array.from(selC.options).some(function(o){return o.value===valCAntes;})){
+      selC.value=valCAntes;
+    } else if(valCAntes){
+      selC.value="";
+    }
+    if(typeof atualizarFiltroSetorConsultaPorComarca==="function") atualizarFiltroSetorConsultaPorComarca();
+  }catch(e){ console.error("popularFiltrosConsulta",e); }
+}
+function atualizarFiltroSetorConsultaPorComarca(){
+  try{
+    var selC=document.getElementById("filtro-comarca-consulta");
+    var selS=document.getElementById("filtro-setor-consulta");
+    if(!selS) return;
+    var comarcaSel=selC ? String(selC.value||"").trim() : "";
+    var valorAntes=String(selS.value||"").trim();
+    var setoresSet=new Set();
+    var normSel=(typeof normalizarTexto==="function"?normalizarTexto(comarcaSel):String(comarcaSel).toLowerCase());
+    if(typeof setoresPorComarca!=="undefined" && setoresPorComarca){
+      if(comarcaSel && setoresPorComarca[comarcaSel]){
+        setoresPorComarca[comarcaSel].forEach(function(s){ if(s) setoresSet.add(String(s)); });
+      } else if(!comarcaSel){
+        if(typeof ordemComarcas!=="undefined" && Array.isArray(ordemComarcas) && ordemComarcas.length){
+          ordemComarcas.forEach(function(c){ (setoresPorComarca[c]||[]).forEach(function(s){ if(s) setoresSet.add(String(s)); }); });
+        } else {
+          Object.keys(setoresPorComarca).forEach(function(c){ (setoresPorComarca[c]||[]).forEach(function(s){ setoresSet.add(String(s)); }); });
+        }
+      } else {
+        var foundKey=Object.keys(setoresPorComarca).find(function(k){ var nk=(typeof normalizarTexto==="function"?normalizarTexto(k):String(k).toLowerCase()); return nk===normSel; });
+        if(foundKey) setoresPorComarca[foundKey].forEach(function(s){ setoresSet.add(String(s)); });
+      }
+    }
+    if(setoresSet.size===0 && typeof listaTelefones!=="undefined" && Array.isArray(listaTelefones)){
+      listaTelefones.forEach(function(it){
+        var c=String((typeof campoTelefone==="function"?campoTelefone(it,["comarca"]):it.comarca)||"").trim();
+        var s=String((typeof campoTelefone==="function"?campoTelefone(it,["setor"]):it.setor)||"").trim();
+        if(!s) return;
+        if(comarcaSel){
+          var nc=(typeof normalizarTexto==="function"?normalizarTexto(c):String(c).toLowerCase());
+          if(nc!==normSel) return;
+        }
+        setoresSet.add(s);
+      });
+    }
+    var listaOrdenada;
+    if(typeof ordenarPorPlanilha==="function"){
+      listaOrdenada=ordenarPorPlanilha(setoresSet,"setor");
+    } else if(typeof obterOrdemSetoresPlanilha==="function"){
+      var ordemS=obterOrdemSetoresPlanilha();
+      var idxS={}; ordemS.forEach(function(v,i){ idxS[v]=i; });
+      listaOrdenada=Array.from(setoresSet).sort(function(a,b){ var ia=idxS.hasOwnProperty(a)?idxS[a]:9999; var ib=idxS.hasOwnProperty(b)?idxS[b]:9999; return ia-ib; });
+    } else {
+      listaOrdenada=Array.from(setoresSet);
+    }
+    var atual=selS.value;
+    selS.textContent="";
+    var optTodos=document.createElement("option");
+    optTodos.value=""; optTodos.textContent="Todos os setores";
+    selS.appendChild(optTodos);
+    listaOrdenada.forEach(function(v){
+      var o=document.createElement("option");
+      o.value=String(v); o.textContent=String(v);
+      selS.appendChild(o);
+    });
+    if(valorAntes && Array.from(selS.options).some(function(o){ return o.value===valorAntes; })){
+      selS.value=valorAntes;
+    } else if(valorAntes){
+      selS.value="";
+    } else {
+      selS.value=atual;
+      if(!Array.from(selS.options).some(function(o){ return o.value===atual; })) selS.value="";
+    }
+  }catch(e){ console.error("atualizarFiltroSetorConsultaPorComarca",e); }
+}
+var filtroConsultaListaTimer=null;
+function filtrarListaConsultaPorComarcaSetorDebounced(){
+  clearTimeout(filtroConsultaListaTimer);
+  filtroConsultaListaTimer=setTimeout(filtrarListaConsultaPorComarcaSetor, 180);
+}
+function filtrarListaConsultaPorComarcaSetor(){
+  try{
+    if(window._filtrarConsultaEmExecucao) return;
+    window._filtrarConsultaEmExecucao=true;
+    var selC=document.getElementById("filtro-comarca-consulta");
+    var selS=document.getElementById("filtro-setor-consulta");
+    var campo=document.getElementById("campo-pesquisa-consulta");
+    var valC=selC ? String(selC.value||"").trim() : "";
+    var valS=selS ? String(selS.value||"").trim() : "";
+    var termoRaw=campo ? String(campo.value||"").trim() : "";
+    var termo=(typeof normalizarTextoConsulta==="function" ? normalizarTextoConsulta(termoRaw) : (typeof normalizarTexto==="function" ? normalizarTexto(termoRaw) : String(termoRaw).normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase().trim()));
+    var normC=(typeof normalizarTexto==="function" ? normalizarTexto(valC) : String(valC).toLowerCase());
+    var normS=(typeof normalizarTexto==="function" ? normalizarTexto(valS) : String(valS).toLowerCase());
+    if(!termo && !normC && !normS){
+      if(typeof renderizarComarcas==="function"){ try{ renderizarComarcas(); }catch(e){} }
+      try{ if(typeof destacarMapaPorBusca==="function") destacarMapaPorBusca(""); }catch(e){}
+      window._filtrarConsultaEmExecucao=false;
+      return;
+    }
+    if(!document.querySelector(".comarca-item")){
+      if(typeof renderizarComarcas==="function"){ try{ renderizarComarcas(); }catch(e){} }
+      if(!document.querySelector(".comarca-item")){ window._filtrarConsultaEmExecucao=false; return; }
+    }
+    if(termo && typeof ordemComarcas!=="undefined" && ordemComarcas.length){
+      try{
+        var totalDOM=document.querySelectorAll(".comarca-item").length;
+        var primeiroGlobal=normalizarTexto(ordemComarcas[0]||"");
+        var primeiroDOM=normalizarTexto(document.querySelector(".comarca-item .comarca-nome")?.textContent||"");
+        var precisaGlobal=totalDOM!==ordemComarcas.length || (primeiroGlobal && primeiroDOM!==primeiroGlobal);
+        if(precisaGlobal){
+          if(typeof renderizarComarcas==="function"){ try{ renderizarComarcas(); }catch(e){} }
+        }
+      }catch(e){}
+    }
+    try{
+      if(typeof atualizarFiltroSetorConsultaPorComarca==="function" && normC){
+        var prevS=valS;
+        var selSBefore=document.getElementById("filtro-setor-consulta");
+        var beforeVal=selSBefore?String(selSBefore.value||""):"";
+        atualizarFiltroSetorConsultaPorComarca();
+        var afterVal=selSBefore?String(selSBefore.value||""):"";
+        if(prevS && beforeVal!==prevS){
+          valS=String(selSBefore.value||"").trim();
+          normS=(typeof normalizarTexto==="function" ? normalizarTexto(valS) : String(valS).toLowerCase());
+        }
+      }
+    }catch(e){}
+    var hasFiltro=!!(normC || normS || termo);
+    document.querySelectorAll(".comarca-item").forEach(function(comarcaItem){
+      var setoresList=comarcaItem.nextElementSibling;
+      var nomeComarcaRaw=(comarcaItem.querySelector(".comarca-nome")?.textContent||"").trim();
+      var nomeComarcaNorm=(typeof normalizarTexto==="function" ? normalizarTexto(nomeComarcaRaw) : String(nomeComarcaRaw).toLowerCase());
+      var comarcaMatchFiltro=!normC || nomeComarcaNorm===normC || nomeComarcaNorm.indexOf(normC)!==-1 || normC.indexOf(nomeComarcaNorm)!==-1;
+      var comarcaMatchTermo=!termo || nomeComarcaNorm.includes(termo);
+      var setores=setoresList ? Array.from(setoresList.querySelectorAll(".setor-item")) : [];
+      var setorEncontrado=false;
+      setores.forEach(function(setorEl){
+        var nomeSetorNorm=(typeof normalizarTexto==="function" ? normalizarTexto(setorEl.textContent) : String(setorEl.textContent).toLowerCase());
+        var setorMatchFiltro=!normS || nomeSetorNorm===normS || nomeSetorNorm.includes(normS);
+        var setorMatchTermo=!termo || nomeSetorNorm.includes(termo);
+        var mostrarSetor=setorMatchFiltro && setorMatchTermo;
+        setorEl.style.display=mostrarSetor?"":"none";
+        if(mostrarSetor) setorEncontrado=true;
+      });
+      var mostrarComarca=false;
+      if(!comarcaMatchFiltro){
+        mostrarComarca=false;
+      } else if(normS){
+        mostrarComarca=setorEncontrado;
+      } else if(termo){
+        if(comarcaMatchTermo){
+          mostrarComarca=true;
+          setores.forEach(function(s){ s.style.display=""; });
+          setorEncontrado=setores.length>0;
+        } else {
+          mostrarComarca=setorEncontrado;
+        }
+      } else {
+        mostrarComarca=true;
+        setores.forEach(function(s){ s.style.display=""; });
+      }
+      comarcaItem.style.display=mostrarComarca?"":"none";
+      if(!setoresList) return;
+      if(!mostrarComarca){
+        setoresList.classList.add("hidden");
+        setoresList.style.display="none";
+      } else {
+        if(hasFiltro){
+          setoresList.classList.remove("hidden");
+          setoresList.style.display="";
+        }
+      }
+    });
+    try{ if(typeof destacarMapaPorBusca==="function") destacarMapaPorBusca(termo); }catch(e){}
+    try{ if(typeof atualizarVisibilidadeBotoesImpressaoConsulta==="function") setTimeout(atualizarVisibilidadeBotoesImpressaoConsulta,20); }catch(e){}
+    window._filtrarConsultaEmExecucao=false;
+  }catch(e){
+    try{ window._filtrarConsultaEmExecucao=false; }catch(e2){}
+    console.error("filtrarListaConsultaPorComarcaSetor",e);
+  }
+}
+(function(){
+  function tentarPopular(){
+    try{
+      var hasOrdem=(typeof ordemComarcas!=="undefined" && Array.isArray(ordemComarcas) && ordemComarcas.length>0) || (typeof setoresPorComarca!=="undefined" && Object.keys(setoresPorComarca).length>0);
+      if(hasOrdem){ if(typeof popularFiltrosConsulta==="function") popularFiltrosConsulta(); return true; }
+    }catch(e){}
+    return false;
+  }
+  setTimeout(function(){ if(!tentarPopular()){ var t=0; var iv=setInterval(function(){ t++; if(tentarPopular()||t>30) clearInterval(iv); }, 350); } }, 700);
+  try{
+    var __t=0; var __iv=setInterval(function(){ __t++; if(typeof window.renderizarComarcas==="function"){ clearInterval(__iv); var _origRC=window.renderizarComarcas; window.renderizarComarcas=function(){ var r=_origRC.apply(this, arguments); try{ if(typeof popularFiltrosConsulta==="function") setTimeout(popularFiltrosConsulta,20);}catch(e){} return r; }; tentarPopular(); } if(__t>40) clearInterval(__iv); }, 400);
+  }catch(e){}
+})();
+
+/* ==========================================================
  * IMPRESSÃO / PDF — Consulta (detalhe do setor)
  * ========================================================== */
 
@@ -1664,4 +1994,5 @@ function imprimirConsultaPDF() {
 
   window.print();
 }
+
 </script>

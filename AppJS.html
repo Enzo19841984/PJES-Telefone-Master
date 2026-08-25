@@ -194,7 +194,7 @@ function iniciarSistema() {
           var _p = (typeof usuarioAtual !== "undefined" && usuarioAtual) ? String(usuarioAtual.perfil || "") : "";
           var _log = !!(typeof usuarioAtual !== "undefined" && usuarioAtual && usuarioAtual.logado === true);
           var _isGS = _log && _p === "GESTOR_SISTEMA";
-          mostrarView(_isGS ? "telefones-view" : "consulta-telefones-view");
+          mostrarView("consulta-telefones-view"); // v3.33 GS usa mapa como GC/visitante
         }
       }catch(eInitTel){}
     }, 90);
@@ -628,13 +628,13 @@ function atualizarInterfaceUsuario() {
     var btnConsultaTodos = document.getElementById("btn-imprimir-consulta-todos");
     if (btnConsultaTodos) {
       // Visitante e Gestor de Conteúdo (mapa) podem imprimir todos os contatos; Gestor Sistema usa Imprimir/PDF da tabela
-      var podeImprimirConsulta = isConsulta && (ehVisitante || ehGestorConteudo);
+      var podeImprimirConsulta = isConsulta && (ehVisitante || ehGestorConteudo || ehGestorSistema); // v3.33 GS usa mapa
       btnConsultaTodos.style.display = podeImprimirConsulta ? "" : "none";
     }
     // Novo Contato no mapa para Gestor de Conteúdo
     var btnNovoNoConsulta = document.getElementById("btn-novo-telefone-consulta");
     if (btnNovoNoConsulta) {
-      btnNovoNoConsulta.style.display = (ehGestorConteudo && isConsulta) ? "" : "none";
+      btnNovoNoConsulta.style.display = ((ehGestorConteudo || ehGestorSistema) && isConsulta) ? "" : "none"; // v3.33 GS usa mapa
     }
     var btnUsuarios = document.getElementById("btn-imprimir-usuarios");
     if (btnUsuarios) {
@@ -651,7 +651,7 @@ function atualizarInterfaceUsuario() {
 
   // v3.29: GC never renders tabela — evita hijack dashboard→consulta quando GC navega
   try{
-    const _isGCNoRender = (typeof usuarioAtual!=="undefined" && usuarioAtual && usuarioAtual.logado===true && String(usuarioAtual.perfil||"").toUpperCase()==="GESTOR_CONTEUDO");
+    const _isGCNoRender = (typeof usuarioAtual!=="undefined" && usuarioAtual && usuarioAtual.logado===true && (String(usuarioAtual.perfil||"").toUpperCase()==="GESTOR_CONTEUDO" || String(usuarioAtual.perfil||"").toUpperCase()==="GESTOR_SISTEMA")); // v3.33 GS tambem usa mapa p/ Telefones
     if(!_isGCNoRender && typeof listaTelefones !==
       "undefined" &&
     document.getElementById(
@@ -762,10 +762,18 @@ function fazerLogin() {
  * - Visitante -> aba de Consulta (mapa + lista somente leitura)
  */
 function navegarParaTelefones() {
-  try{ if (typeof usuarioAtual !== "undefined" && usuarioAtual && usuarioAtual.logado === true && String(usuarioAtual.perfil).toUpperCase() === "GESTOR_CONTEUDO") {
-    mostrarView("consulta-telefones-view");
-    return;
-  } }catch(e){}
+  // v3.33 GS usa mapa (consulta-telefones-view) com todas comarcas, igual GC mas sem restricao
+  try{
+    var _pNav = (typeof usuarioAtual!=="undefined" && usuarioAtual) ? String(usuarioAtual.perfil||"").toUpperCase() : "";
+    var _lNav = !!(typeof usuarioAtual!=="undefined" && usuarioAtual && usuarioAtual.logado===true);
+    if(_lNav && (_pNav==="GESTOR_SISTEMA" || _pNav==="GESTOR_CONTEUDO")){
+      mostrarView("consulta-telefones-view");
+      try{ if(typeof renderizarMapaConsulta==="function") setTimeout(function(){ try{ renderizarMapaConsulta(); }catch(e){} }, 80); }catch(e){}
+      try{ if(typeof tentarInicializarMapa==="function") setTimeout(function(){ try{ tentarInicializarMapa(); }catch(e){} }, 120); }catch(e){}
+      try{ if(typeof aoEntrarConsultaTelefonesView==="function") setTimeout(function(){ try{ aoEntrarConsultaTelefonesView(); }catch(e){} }, 160); }catch(e){}
+      return;
+    }
+  }catch(e){}
   try{ if(typeof usuarioAtual!=="undefined" && usuarioAtual && usuarioAtual.logado===true && String(usuarioAtual.perfil).toUpperCase()==="USUARIO_CONSULTA"){ mostrarView("consulta-telefones-view"); return; } }catch(e2){}
   var ehGestor =
     typeof usuarioAtual !== "undefined" &&
@@ -773,7 +781,20 @@ function navegarParaTelefones() {
     usuarioAtual.logado === true &&
     usuarioAtual.perfil === "GESTOR_SISTEMA";
 
-  mostrarView(ehGestor ? "telefones-view" : "consulta-telefones-view");
+  // v3.33: mesmo GS cai no mapa; tabela fica acessivel via navegarParaTabelaTelefones() ou mostrarView("telefones-view") manual
+  if(ehGestor){
+    mostrarView("consulta-telefones-view");
+    try{ if(typeof renderizarMapaConsulta==="function") setTimeout(function(){ try{ renderizarMapaConsulta(); }catch(e){} }, 80); }catch(e){}
+    return;
+  }
+  mostrarView("consulta-telefones-view");
+}
+function navegarParaTabelaTelefones(){
+  // v3.33 helper: GS ainda pode ver tabela se quiser (acesso direto, sem hijack)
+  try{ window.__gsTabelaLiberada = true; }catch(e){}
+  try{ if(typeof mostrarView==="function") mostrarView("telefones-view"); }catch(e){}
+  try{ if(typeof carregarFiltros==="function") setTimeout(function(){ try{ carregarFiltros(); }catch(e){} }, 80); }catch(e){}
+  try{ if(typeof atualizarTabelaComFiltros==="function") setTimeout(function(){ try{ atualizarTabelaComFiltros(); }catch(e){} }, 120); else if(typeof renderizarTabela==="function" && typeof listaTelefones!=="undefined") setTimeout(function(){ try{ window.__gsTabelaLiberada=true; renderizarTabela(listaTelefones); }catch(e){} }, 120); }catch(e){}
 }
 let _pollingNotificacoesTimer = null;
 
@@ -933,8 +954,10 @@ function resetarTelefonesView(){
 }
 function aoEntrarConsultaTelefonesView(){
   try{
-    var isGC = typeof usuarioAtual!=="undefined" && usuarioAtual && String(usuarioAtual.perfil||"").toUpperCase()==="GESTOR_CONTEUDO";
-    if(!isGC) return;
+    var _perfAE = typeof usuarioAtual!=="undefined" && usuarioAtual ? String(usuarioAtual.perfil||"").toUpperCase() : "";
+    var isGC = _perfAE==="GESTOR_CONTEUDO";
+    var isGS = _perfAE==="GESTOR_SISTEMA";
+    if(!isGC && !isGS) return; // v3.33 GS tambem entra via mapa
     // If list empty or showing placeholder, render only allowed comarcas in ordemComarcas order
     var container = document.getElementById("consulta-lista");
     if(!container) return;
